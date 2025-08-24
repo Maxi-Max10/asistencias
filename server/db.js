@@ -2,10 +2,9 @@ const path = require("path");
 const fs = require("fs");
 const Database = require("better-sqlite3");
 
-// Permitimos configurar el directorio del DB por env (útil en Render con disk)
+// Podés cambiar DB_DIR por env si querés; si no, usa la carpeta del server
 const DB_DIR = process.env.DB_DIR || __dirname;
 
-// Si el directorio no existe, crearlo
 if (!fs.existsSync(DB_DIR)) {
   fs.mkdirSync(DB_DIR, { recursive: true });
 }
@@ -13,7 +12,6 @@ if (!fs.existsSync(DB_DIR)) {
 const dbPath = path.join(DB_DIR, "fincas.db");
 const db = new Database(dbPath);
 
-// Si OneDrive te bloquea, podés usar DELETE:
 // db.pragma("journal_mode = DELETE");
 db.exec(`
 PRAGMA journal_mode = WAL;
@@ -43,7 +41,7 @@ CREATE TABLE IF NOT EXISTS attendance (
 );
 `);
 
-// 1) agregar columna doc si no existe
+// Agregar columna doc si no existe
 const hasDocCol = db
   .prepare(`SELECT 1 FROM pragma_table_info('workers') WHERE name='doc'`)
   .get();
@@ -52,7 +50,7 @@ if (!hasDocCol) {
   db.exec(`ALTER TABLE workers ADD COLUMN doc TEXT`);
 }
 
-// 2) índice único sobre doc (permite múltiples NULL, evita duplicados reales)
+// Índice único por doc (permite múltiples NULL)
 const hasDocIdx = db
   .prepare(`SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_workers_doc'`)
   .get();

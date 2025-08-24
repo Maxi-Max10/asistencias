@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
 const app = express();
+const db = require("./db");
 
 app.use(cors());               // permitir desde cualquier origen
 app.use(express.json());
@@ -22,8 +23,23 @@ app.use((req, res, next) => {
   next();
 });
 
+try {
+  const row = db.prepare("SELECT COUNT(*) AS c FROM crews").get();
+  if (!row || !row.c) {
+    const names = ["Finca A", "Finca B", "Finca C", "Finca D", "Finca E"];
+    const stmt = db.prepare("INSERT INTO crews (name) VALUES (?)");
+    db.transaction(() => {
+      for (const n of names) stmt.run(n);
+    })();
+    console.log("Crews iniciales creados.");
+  }
+} catch (e) {
+  console.error("Error auto-seeding crews:", e);
+}
+
 const PORT = process.env.PORT || 4000;
-// En Render es importante NO fijar 127.0.0.1
+// Render expone el puerto en process.env.PORT y escucha en 0.0.0.0
 app.listen(PORT, () => {
   console.log(`API on http://0.0.0.0:${PORT}`);
 });
+
