@@ -1,0 +1,11 @@
+{
+  "name": "asistencia",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["server","web"],
+  "scripts": {
+    "server": "npm -w server run dev",
+    "seed": "npm -w server run seed",
+    "web": "npm -w web run dev"
+  }
+}
