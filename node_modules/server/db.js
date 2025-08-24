@@ -2,10 +2,24 @@ const path = require("path");
 const fs = require("fs");
 const Database = require("better-sqlite3");
 
-// Podés cambiar DB_DIR por env si querés; si no, usa la carpeta del server
-const DB_DIR = process.env.DB_DIR || __dirname;
+let DB_DIR = process.env.DB_DIR || __dirname;
 
-if (!fs.existsSync(DB_DIR)) {
+function ensureDir(dir) {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    // prueba de escritura mínima
+    const testFile = path.join(dir, ".write_test");
+    fs.writeFileSync(testFile, "ok");
+    fs.unlinkSync(testFile);
+    return true;
+  } catch (e) {
+    console.warn(`DB_DIR no escribible (${dir}). Fallback a __dirname.`, e.message);
+    return false;
+  }
+}
+
+if (!ensureDir(DB_DIR)) {
+  DB_DIR = __dirname;
   fs.mkdirSync(DB_DIR, { recursive: true });
 }
 
