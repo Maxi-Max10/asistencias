@@ -1,84 +1,101 @@
 const express = require("express");
 const dayjs = require("dayjs");
-const router = express.Router();
 const db = require("../db");
 
-// Normaliza documento: quita separadores y pone mayúsculas
-const normDoc = (s="") => String(s).replace(/[^0-9a-z]/gi, "").toUpperCase();
+const router = express.Router();
 
+/* ===================== Helpers DB ===================== */
+
+// crea (si no existe) un trabajador por doc + crewId
+function upsertWorkerByDoc({ crewId, doc, fullname = null }) {
+  if (!doc || !crewId) return null;
+
+  // ¿existe worker con ese doc?
+  const w = db.prepare(`SELECT * FROM workers WHERE doc = ?`).get(doc);
+  if (w) {
+    // si existe pero está en otra cuadrilla y no tiene crew_id correcto, lo “movemos”
+    if (w.crew_id !== crewId) {
+      db.prepare(`UPDATE workers SET crew_id = ? WHERE id = ?`).run(crewId, w.id);
+      return { ...w, crew_id: crewId };
+    }
+    return w;
+  }
+
+  // si no existe: crear
+  const name = fullname && fullname.trim() ? fullname.trim() : doc;
+  const info = db
+    .prepare(`INSERT INTO workers (crew_id, fullname, active, doc) VALUES (?, ?, 1, ?)`)
+    .run(crewId, name, doc);
+  return db.prepare(`SELECT * FROM workers WHERE id = ?`).get(info.lastInsertRowid);
+}
+
+// guarda/actualiza la asistencia de HOY para worker
+function upsertAttendance({ workerId, status, notes = "" }) {
+  const date = dayjs().format("YYYY-MM-DD");
+  // UNIQUE(worker_id, date)
+  const existing = db
+    .prepare(`SELECT id FROM attendance WHERE worker_id = ? AND date = ?`)
+    .get(workerId, date);
+
+  if (existing) {
+    db.prepare(`UPDATE attendance SET status = ?, notes = ? WHERE id = ?`)
+      .run(status, notes, existing.id);
+    return existing.id;
+  } else {
+    const info = db
+      .prepare(`INSERT INTO attendance (worker_id, date, status, notes) VALUES (?, ?, ?, ?)`)
+      .run(workerId, date, status, notes);
+    return info.lastInsertRowid;
+  }
+}
+
+/* ===================== Rutas ===================== */
+
+// POST /api/attendance  { crewId, doc, status, fullname? }
 router.post("/", (req, res, next) => {
   try {
-    let { workerId, doc, status, date, notes, crewId = 1 } = req.body || {};
+    const { crewId, doc, status, fullname } = req.body || {};
+    if (!crewId || !doc || !status) return res.status(400).json({ error: "crewId, doc y status son requeridos" });
 
-    if (!status) return res.status(400).json({ error: "status requerido" });
+    const worker = upsertWorkerByDoc({ crewId: Number(crewId), doc: String(doc).trim(), fullname });
+    if (!worker) return res.status(400).json({ error: "No se pudo crear/obtener el trabajador" });
 
-    if (!workerId && doc) {
-      const ndoc = normDoc(doc);
-      let w = db.prepare("SELECT id FROM workers WHERE doc=?").get(ndoc);
-      if (!w) {
-        const info = db.prepare(
-          "INSERT INTO workers (crew_id, fullname, doc) VALUES (?,?,?)"
-        ).run(crewId, ndoc, ndoc); // fullname = doc normalizado
-        workerId = info.lastInsertRowid;
-      } else {
-        workerId = w.id;
-      }
-    }
-    if (!workerId) return res.status(400).json({ error: "workerId o doc requerido" });
-
-    const theDate = date || dayjs().format("YYYY-MM-DD");
-    db.prepare(`
-      INSERT INTO attendance (worker_id, date, status, notes)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(worker_id, date)
-      DO UPDATE SET status=excluded.status, notes=excluded.notes
-    `).run(workerId, theDate, status, notes || null);
-
-    res.json({ ok: true, workerId, date: theDate, status });
+    const id = upsertAttendance({ workerId: worker.id, status });
+    return res.json({ ok: true, id, worker });
   } catch (e) { next(e); }
 });
 
+// POST /api/attendance/bulk  { crewId, items: [{doc,status,fullname?}, ...] }
 router.post("/bulk", (req, res, next) => {
   try {
-    const items = Array.isArray(req.body?.items) ? req.body.items : [];
-    if (!items.length) return res.status(400).json({ error: "items vacio" });
-
-    const up = db.prepare(`
-      INSERT INTO attendance (worker_id, date, status, notes)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(worker_id, date)
-      DO UPDATE SET status=excluded.status, notes=excluded.notes
-    `);
-    const findByDoc = db.prepare("SELECT id FROM workers WHERE doc=?");
-    const createByDoc = db.prepare("INSERT INTO workers (crew_id, fullname, doc) VALUES (?,?,?)");
-
-    let ok = 0;
-    for (const it of items) {
-      if (!it) continue;
-      let { workerId, doc, status, date, notes } = it;
-      if (!status) continue;
-
-      if (!workerId && doc) {
-        const ndoc = normDoc(doc);
-        let w = findByDoc.get(ndoc);
-        if (!w) {
-          const info = createByDoc.run(1, ndoc, ndoc);
-          workerId = info.lastInsertRowid;
-        } else {
-          workerId = w.id;
-        }
-      }
-      if (!workerId) continue;
-
-      const d = date || dayjs().format("YYYY-MM-DD");
-      up.run(workerId, d, status, notes || null);
-      ok++;
+    const { crewId, items } = req.body || {};
+    if (!crewId || !Array.isArray(items)) {
+      return res.status(400).json({ error: "crewId e items son requeridos" });
     }
-    res.json({ ok, total: items.length });
+
+    const tx = db.transaction((arr) => {
+      let count = 0;
+      for (const it of arr) {
+        const doc = (it.doc || "").toString().trim();
+        const status = it.status === "absent" ? "absent" : "present";
+        const fullname = it.fullname || null;
+        if (!doc) continue;
+
+        const worker = upsertWorkerByDoc({ crewId: Number(crewId), doc, fullname });
+        if (!worker) continue;
+
+        upsertAttendance({ workerId: worker.id, status });
+        count++;
+      }
+      return count;
+    });
+
+    const count = tx(items);
+    return res.json({ ok: true, count });
   } catch (e) { next(e); }
 });
 
-// Lista de asistencias de HOY por finca
+// GET /api/attendance/today?crewId=1&date=YYYY-MM-DD
 router.get("/today", (req, res, next) => {
   try {
     const crewId = Number(req.query.crewId || 1);
@@ -95,44 +112,7 @@ router.get("/today", (req, res, next) => {
     `).all(date, crewId);
 
     res.json(rows);
-  } catch (e) {
-    next(e);
-  }
-});
-
-
-
-router.get("/export.csv", (req, res, next) => {
-  try {
-    const d = req.query.date || dayjs().format("YYYY-MM-DD");
-    const rows = db.prepare(`
-      SELECT IFNULL(w.doc,'') AS doc, a.date, a.status, IFNULL(a.notes,'') notes
-      FROM attendance a
-      JOIN workers w ON w.id = a.worker_id
-      WHERE a.date = ?
-      ORDER BY w.fullname
-    `).all(d);
-
-    const header = "doc,date,status,notes";
-    const csv = [header, ...rows.map(r =>
-      [r.doc, r.date, r.status, `"${(r.notes||"").replace(/"/g,'""')}"`].join(",")
-    )].join("\n");
-
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="attendance-${d}.csv"`);
-    res.send(csv);
   } catch (e) { next(e); }
 });
-
-// DELETE /api/attendance/:id  -> borra un registro puntual de asistencia
-router.delete("/:id", (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    if (!id) return res.status(400).json({ error: "bad_id" });
-    const info = db.prepare("DELETE FROM attendance WHERE id=?").run(id);
-    res.json({ ok: info.changes > 0 });
-  } catch (e) { next(e); }
-});
-
 
 module.exports = router;

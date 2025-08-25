@@ -6,7 +6,6 @@ import TodayList from "../components/TodayList";
 export default function AttendancePage() {
   const { id } = useParams();
   const crewId = Number(id) || 1;
-
   const [refreshKey, setRefreshKey] = useState(0);
   const handleSaved = () => setRefreshKey(k => k + 1);
 
