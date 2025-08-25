@@ -49,9 +49,6 @@ function upsertAttendance({ workerId, status, notes = "" }) {
   }
 }
 
-/* ===================== Rutas ===================== */
-
-// POST /api/attendance  { crewId, doc, status, fullname? }
 router.post("/", (req, res, next) => {
   try {
     console.log("POST /attendance", req.body);
@@ -66,7 +63,6 @@ router.post("/", (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// POST /api/attendance/bulk  { crewId, items: [{doc,status,fullname?}, ...] }
 router.post("/bulk", (req, res, next) => {
   try {
     console.log("POST /attendance/bulk", { crewId: req.body?.crewId, count: req.body?.items?.length });
@@ -97,7 +93,7 @@ router.post("/bulk", (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// GET /api/attendance/today?crewId=1&date=YYYY-MM-DD
+
 router.get("/today", (req, res, next) => {
   try {
     const crewId = Number(req.query.crewId || 1);

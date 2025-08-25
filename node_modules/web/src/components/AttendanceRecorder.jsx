@@ -128,56 +128,51 @@ function extractPairsLatam(phrase){
   return Array.from(map, ([doc,status]) => ({ doc, status }));
 }
 
- export default function AttendanceRecorder({ crewId = 1, onSaved }) {
-   const [doc, setDoc] = useState("");
-   const [status, setStatus] = useState("present");
-   const [lastHeard, setLastHeard] = useState("");
-   const { start, stop, active } = useSpeech(setLastHeard);
+export default function AttendanceRecorder({ crewId = 1, onSaved }) {
+  const [doc, setDoc] = useState("");
+  const [status, setStatus] = useState("present");
+  const [lastHeard, setLastHeard] = useState("");
+  const { start, stop, active } = useSpeech(setLastHeard);
 
-   const queueRef = useRef(new Map());
-   const timerRef = useRef(null);
-   const sendingRef = useRef(false);
+  // refs para estado interno
+  const queueRef = useRef(new Map()); // doc -> status
+  const timerRef = useRef(null);
+  const sendingRef = useRef(false);
 
-useEffect(() => {
-  // 1) cortar grabación si estaba activa (evita que quede escuchando a la finca anterior)
-  try { stop(); } catch (_) {}
+  // ref con el crewId SIEMPRE actualizado (evita closures viejos)
+  const crewIdRef = useRef(crewId);
+  useEffect(() => { crewIdRef.current = crewId; }, [crewId]);
 
-  // 2) limpiar cola/timer
-  queueRef.current.clear();
-  if (timerRef.current) {
-    clearTimeout(timerRef.current);
-    timerRef.current = null;
-  }
+  // Al cambiar de finca: detener grabación, limpiar cola/timers y reset UI
+  useEffect(() => {
+    try { stop(); } catch {}
+    queueRef.current.clear();
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    setLastHeard("");
+    setDoc("");
+    setStatus("present");
+    // (opcional) precargar workers de la nueva finca
+    fetch(`${API}/api/workers?crewId=${crewId}`, { cache: "no-store" }).catch(() => {});
+  }, [crewId, stop]);
 
-  // 3) reset UI
-  setLastHeard("");
-  setDoc("");
-  setStatus("present");
-
-  // 4) (opcional) tocar el endpoint de workers de la nueva finca
-  fetch(`${API}/api/workers?crewId=${crewId}`, { cache: "no-store" }).catch(() => {});
-
-  // no hace falta cleanup aquí porque todo se vuelve a limpiar cuando cambia crewId
-}, [crewId]);
-
-
-
+  // Flush en lote (usa SIEMPRE el crewId actual)
   const flushQueue = async () => {
     if (sendingRef.current) return;
-    const items = Array.from(queueRef.current, ([doc, status]) => ({ doc, status }));
+    const items = Array.from(queueRef.current, ([d, s]) => ({ doc: d, status: s }));
     if (!items.length) return;
+
     sendingRef.current = true;
+    const currentCrew = Number(crewIdRef.current || 1);
     try {
-      await fetch(`${API}/api/attendance/bulk`, {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        // === NUEVO: incluimos crewId en bulk ===
-        body: JSON.stringify({ crewId, items })
+      await fetch(`${API}/api/attendance/bulk?crewId=${currentCrew}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ crewId: currentCrew, items })
       });
       queueRef.current.clear();
       setDoc("");
       onSaved?.();
-    } catch(e){
+    } catch (e) {
       console.error("Registrar asistencia (bulk):", e);
     } finally {
       sendingRef.current = false;
@@ -185,13 +180,13 @@ useEffect(() => {
   };
 
   const enqueueItems = (items) => {
-    for (const it of items) queueRef.current.set(it.doc, it.status); // último gana
+    for (const it of items) queueRef.current.set(it.doc, it.status);
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(flushQueue, 250);
   };
 
-  // Voz → parse LATAM y encolado
-  useEffect(()=>{
+  // Voz → parse LATAM y encolado (tu lógica tal cual)
+  useEffect(() => {
     if (!lastHeard) return;
     const phrase = lastHeard.toLowerCase();
 
@@ -204,7 +199,6 @@ useEffect(() => {
       return;
     }
 
-    // -------- Fallback seguro (un solo doc + estado) --------
     const kwRegexGlobal = /(dni|documento|c[eé]dula|ci|identidad|run|rut|cpf|curp|rfc|rg)/gi;
     let m, lastKw = null; while ((m = kwRegexGlobal.exec(phrase)) !== null) lastKw = m[1].toLowerCase();
 
@@ -226,7 +220,7 @@ useEffect(() => {
     let singleDoc = "";
     if (lastKw === "curp" || lastKw === "rfc") {
       const alnum = (tail.match(/[0-9a-z]/gi) || []).join("").toUpperCase();
-      if (alnum.length >= 6) singleDoc = alnum.slice(0,18);
+      if (alnum.length >= 6) singleDoc = alnum.slice(0, 18);
     } else {
       const digits = (tail.match(/[0-9]/g) || []).join("");
       if (digits) {
@@ -241,19 +235,19 @@ useEffect(() => {
     if (singleDoc && st) enqueueItems([{ doc: singleDoc, status: st }]);
   }, [lastHeard]);
 
-  // Modo manual
+  // Modo manual (también envía crewId en URL y body)
   const postSingle = async (d, s) => {
     if (!d || !s) return;
+    const currentCrew = Number(crewIdRef.current || 1);
     try {
-      await fetch(`${API}/api/attendance`, {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        // === NUEVO: incluimos crewId también en el alta manual ===
-        body: JSON.stringify({ crewId, doc: d, status: s })
+      await fetch(`${API}/api/attendance?crewId=${currentCrew}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ crewId: currentCrew, doc: d, status: s })
       });
       setDoc("");
       onSaved?.();
-    } catch(e){
+    } catch (e) {
       console.error("Registrar asistencia (single):", e);
     }
   };
@@ -261,12 +255,12 @@ useEffect(() => {
   return (
     <div className="border rounded p-3 space-y-3">
       <div className="flex items-center gap-2">
-        <button onClick={active?stop:start}
-                className={`px-3 py-2 rounded ${active?'bg-red-500 text-white':'bg-green-600 text-white'}`}>
+        <button onClick={active ? stop : start}
+          className={`px-3 py-2 rounded ${active ? 'bg-red-500 text-white' : 'bg-green-600 text-white'}`}>
           {active ? "Detener" : "Grabar por voz"}
         </button>
         <span className="text-sm opacity-70">
-      EJEMPLO : “DNI 12 34 56 78 PRESENTE"
+          Ejemplo: “DNI 12 34 56 78 presente  ||  RUT 12.345.678-K ausente”.
         </span>
       </div>
 
@@ -275,24 +269,23 @@ useEffect(() => {
           className="border rounded px-2 py-2"
           placeholder="Documento (DNI/RUT/CPF/CURP...)"
           value={doc}
-          onChange={e=>setDoc(e.target.value.replace(/[^0-9a-z]/gi,"").toUpperCase())}
+          onChange={e => setDoc(e.target.value.replace(/[^0-9a-z]/gi, "").toUpperCase())}
         />
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-1">
             <input type="radio" name="st" value="present"
-                   checked={status==='present'} onChange={()=>setStatus('present')} />
+              checked={status === 'present'} onChange={() => setStatus('present')} />
             Presente
           </label>
           <label className="flex items-center gap-1">
             <input type="radio" name="st" value="absent"
-                   checked={status==='absent'} onChange={()=>setStatus('absent')} />
+              checked={status === 'absent'} onChange={() => setStatus('absent')} />
             Ausente
           </label>
         </div>
         <button
-          onClick={()=>postSingle(doc.trim(), status)}
-          className="px-4 py-2 bg-blue-600 text-white rounded"
-        >
+          onClick={() => postSingle(doc.trim(), status)}
+          className="px-4 py-2 bg-blue-600 text-white rounded">
           Guardar
         </button>
       </div>
@@ -306,3 +299,4 @@ useEffect(() => {
     </div>
   );
 }
+
