@@ -16,8 +16,8 @@ export default function AttendancePage() {
         <Link to="/" className="underline">← Volver</Link>
       </div>
 
-      <AttendanceRecorder crewId={crewId} onSaved={handleSaved} />
-      <TodayList crewId={crewId} refreshKey={refreshKey} />
+      <AttendanceRecorder key={`rec-${crewId}`} crewId={crewId} onSaved={handleSaved} />
+      <TodayList key={`list-${crewId}`} crewId={crewId} refreshKey={refreshKey} />
     </div>
   );
 }

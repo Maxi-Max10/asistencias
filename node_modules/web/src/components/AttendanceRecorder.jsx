@@ -266,7 +266,7 @@ useEffect(() => {
           {active ? "Detener" : "Grabar por voz"}
         </button>
         <span className="text-sm opacity-70">
-          Ejemplo: “DNI 12 34 56 78 presente  ||  RUT 12.345.678-K ausente”.
+      EJEMPLO : “DNI 12 34 56 78 PRESENTE"
         </span>
       </div>
 
