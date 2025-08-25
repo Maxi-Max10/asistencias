@@ -68,54 +68,44 @@ function extractPairsLatam(phrase){
       if (id.length < 5) return;
       if (id.length > 12) id = id.slice(-12);
     } else {
-      // alfanumérico (CURP/RFC o RUT con K)
       if (id.length < 6) return;
       if (id.length > 18) id = id.slice(0, 18);
     }
     out.push({ doc: id, status });
   };
 
-  let capturing = false, buf = "", lastKw = null;
+  let buf = "";
   const pairs = [];
 
   for (let i=0; i<tokens.length; i++){
     const raw = tokens[i];
     const t = norm(raw);
 
-    // 1) keyword → seteo modo y comienzo captura
-    if (KW.has(t)) { capturing = true; buf=""; lastKw = t; setModeByKw(t); continue; }
+    if (KW.has(t)) { buf=""; setModeByKw(t); continue; }
 
-    // 2) estado ANTES de tocar buffer
     const st = statusFromTokens(tokens, i);
     if (st) {
       if (buf) pushDoc(buf, st.status, pairs);
-      capturing = false; buf = ""; lastKw = null; mode = "numeric";
+      buf = ""; mode = "numeric";
       i += (st.inc - 1);
       continue;
     }
 
-    // 3) palabras a ignorar
     if (SKIP.has(t)) continue;
 
-    // 4) anexar según modo
     const chunk = cleanChunk(raw);
     if (!chunk) continue;
 
     if (mode === "numeric") {
-      // solo dígitos
       const d = chunk.replace(/\D/g,"");
       if (!d) continue;
-      if (/^0\d{1,2}$/.test(d) && isDigits(buf)) buf += d.slice(1);
-      else buf += d;
+      buf += d;
     } else if (mode === "rut") {
-      // dígitos + posible 'K' final
-      if (/^[0-9]+$/.test(chunk)) {
-        if (/^0\d{1,2}$/.test(chunk) && isDigits(buf)) buf += chunk.slice(1);
-        else buf += chunk;
-      } else if (chunk.length === 1 && /k/i.test(chunk) && isDigits(buf) && buf.length >= 6) {
+      if (/^[0-9]+$/.test(chunk)) buf += chunk;
+      else if (chunk.length === 1 && /k/i.test(chunk) && /^[0-9]+$/.test(buf) && buf.length >= 6) {
         buf += "K";
-      } // otras letras: ignorar
-    } else { // alnum (CURP/RFC)
+      }
+    } else { // alnum
       buf += chunk.toUpperCase();
     }
 
@@ -134,28 +124,23 @@ export default function AttendanceRecorder({ crewId = 1, onSaved }) {
   const [lastHeard, setLastHeard] = useState("");
   const { start, stop, active } = useSpeech(setLastHeard);
 
-  // refs para estado interno
   const queueRef = useRef(new Map()); // doc -> status
   const timerRef = useRef(null);
   const sendingRef = useRef(false);
 
-  // ref con el crewId SIEMPRE actualizado (evita closures viejos)
+  // crewId siempre actualizado (evita closures viejos)
   const crewIdRef = useRef(crewId);
   useEffect(() => { crewIdRef.current = crewId; }, [crewId]);
 
-  // Al cambiar de finca: detener grabación, limpiar cola/timers y reset UI
+  // Al cambiar de finca: detener grabación, limpiar cola/timers y reset UI; precargar workers
   useEffect(() => {
     try { stop(); } catch {}
     queueRef.current.clear();
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
-    setLastHeard("");
-    setDoc("");
-    setStatus("present");
-    // (opcional) precargar workers de la nueva finca
+    setLastHeard(""); setDoc(""); setStatus("present");
     fetch(`${API}/api/workers?crewId=${crewId}`, { cache: "no-store" }).catch(() => {});
   }, [crewId, stop]);
 
-  // Flush en lote (usa SIEMPRE el crewId actual)
   const flushQueue = async () => {
     if (sendingRef.current) return;
     const items = Array.from(queueRef.current, ([d, s]) => ({ doc: d, status: s }));
@@ -185,7 +170,6 @@ export default function AttendanceRecorder({ crewId = 1, onSaved }) {
     timerRef.current = setTimeout(flushQueue, 250);
   };
 
-  // Voz → parse LATAM y encolado (tu lógica tal cual)
   useEffect(() => {
     if (!lastHeard) return;
     const phrase = lastHeard.toLowerCase();
@@ -220,7 +204,7 @@ export default function AttendanceRecorder({ crewId = 1, onSaved }) {
     let singleDoc = "";
     if (lastKw === "curp" || lastKw === "rfc") {
       const alnum = (tail.match(/[0-9a-z]/gi) || []).join("").toUpperCase();
-      if (alnum.length >= 6) singleDoc = alnum.slice(0, 18);
+      if (alnum.length >= 6) singleDoc = alnum.slice(0,18);
     } else {
       const digits = (tail.match(/[0-9]/g) || []).join("");
       if (digits) {
@@ -235,7 +219,6 @@ export default function AttendanceRecorder({ crewId = 1, onSaved }) {
     if (singleDoc && st) enqueueItems([{ doc: singleDoc, status: st }]);
   }, [lastHeard]);
 
-  // Modo manual (también envía crewId en URL y body)
   const postSingle = async (d, s) => {
     if (!d || !s) return;
     const currentCrew = Number(crewIdRef.current || 1);
@@ -256,7 +239,7 @@ export default function AttendanceRecorder({ crewId = 1, onSaved }) {
     <div className="border rounded p-3 space-y-3">
       <div className="flex items-center gap-2">
         <button onClick={active ? stop : start}
-          className={`px-3 py-2 rounded ${active ? 'bg-red-500 text-white' : 'bg-green-600 text-white'}`}>
+                className={`px-3 py-2 rounded ${active?'bg-red-500 text-white':'bg-green-600 text-white'}`}>
           {active ? "Detener" : "Grabar por voz"}
         </button>
         <span className="text-sm opacity-70">
@@ -269,23 +252,24 @@ export default function AttendanceRecorder({ crewId = 1, onSaved }) {
           className="border rounded px-2 py-2"
           placeholder="Documento (DNI/RUT/CPF/CURP...)"
           value={doc}
-          onChange={e => setDoc(e.target.value.replace(/[^0-9a-z]/gi, "").toUpperCase())}
+          onChange={e=>setDoc(e.target.value.replace(/[^0-9a-z]/gi,"").toUpperCase())}
         />
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-1">
             <input type="radio" name="st" value="present"
-              checked={status === 'present'} onChange={() => setStatus('present')} />
+                   checked={status==='present'} onChange={()=>setStatus('present')} />
             Presente
           </label>
           <label className="flex items-center gap-1">
             <input type="radio" name="st" value="absent"
-              checked={status === 'absent'} onChange={() => setStatus('absent')} />
+                   checked={status==='absent'} onChange={()=>setStatus('absent')} />
             Ausente
           </label>
         </div>
         <button
-          onClick={() => postSingle(doc.trim(), status)}
-          className="px-4 py-2 bg-blue-600 text-white rounded">
+          onClick={()=>postSingle(doc.trim(), status)}
+          className="px-4 py-2 bg-blue-600 text-white rounded"
+        >
           Guardar
         </button>
       </div>
@@ -299,4 +283,3 @@ export default function AttendanceRecorder({ crewId = 1, onSaved }) {
     </div>
   );
 }
-

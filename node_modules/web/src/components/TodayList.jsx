@@ -5,20 +5,23 @@ export default function TodayList({ crewId, refreshKey }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
-    try {
-      setLoading(true);
-      const r = await fetch(`${API}/api/attendance/today?crewId=${crewId}`, { cache: "no-store" });
-      const data = await r.json();
-      setRows(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error("Cargar asistencias de hoy:", e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { load(); }, [crewId, refreshKey]);
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        setLoading(true);
+        const r = await fetch(`${API}/api/attendance/today?crewId=${crewId}`, { cache: "no-store" });
+        const data = await r.json();
+        if (!cancelled) setRows(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error("Cargar asistencias de hoy:", e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [crewId, refreshKey]);
 
   if (loading) return <div className="text-sm opacity-70">Cargando...</div>;
   if (!rows.length) return <div className="text-sm opacity-70">Sin registros aún.</div>;

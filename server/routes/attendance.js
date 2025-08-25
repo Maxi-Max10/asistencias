@@ -4,16 +4,14 @@ const db = require("../db");
 
 const router = express.Router();
 
-/* ===================== Helpers DB ===================== */
+/* ========= Helpers DB ========= */
 
 // crea (si no existe) un trabajador por doc + crewId
 function upsertWorkerByDoc({ crewId, doc, fullname = null }) {
   if (!doc || !crewId) return null;
 
-  // ¿existe worker con ese doc?
   const w = db.prepare(`SELECT * FROM workers WHERE doc = ?`).get(doc);
   if (w) {
-    // si existe pero está en otra cuadrilla, lo movemos
     if (w.crew_id !== crewId) {
       db.prepare(`UPDATE workers SET crew_id = ? WHERE id = ?`).run(crewId, w.id);
       return { ...w, crew_id: crewId };
@@ -21,18 +19,16 @@ function upsertWorkerByDoc({ crewId, doc, fullname = null }) {
     return w;
   }
 
-  // si no existe: crear
   const name = fullname && fullname.trim() ? fullname.trim() : doc;
   const info = db
     .prepare(`INSERT INTO workers (crew_id, fullname, active, doc) VALUES (?, ?, 1, ?)`)
     .run(crewId, name, doc);
-
   return db.prepare(`SELECT * FROM workers WHERE id = ?`).get(info.lastInsertRowid);
 }
 
 // guarda/actualiza la asistencia de HOY para worker
 function upsertAttendance({ workerId, status, notes = "" }) {
-  const date = dayjs().format("YYYY-MM-DD"); // UNIQUE(worker_id, date)
+  const date = dayjs().format("YYYY-MM-DD");
   const existing = db
     .prepare(`SELECT id FROM attendance WHERE worker_id = ? AND date = ?`)
     .get(workerId, date);
@@ -49,16 +45,13 @@ function upsertAttendance({ workerId, status, notes = "" }) {
   }
 }
 
-/* ===================== Rutas ===================== */
+/* ========= Rutas ========= */
 
-// POST /api/attendance  { crewId, doc, status, fullname? }  (acepta también ?crewId=)
+// POST /api/attendance  (acepta crewId por body o query)
 router.post("/", (req, res, next) => {
   try {
-    const crewFromBody  = req.body?.crewId;
-    const crewFromQuery = req.query?.crewId;
-    const crewId = Number(crewFromBody ?? crewFromQuery);
+    const crewId = Number(req.body?.crewId ?? req.query?.crewId);
     const { doc, status, fullname } = req.body || {};
-
     console.log("POST /attendance", { crewId, doc, status });
 
     if (!crewId || !doc || !status) {
@@ -68,7 +61,7 @@ router.post("/", (req, res, next) => {
     const worker = upsertWorkerByDoc({
       crewId,
       doc: String(doc).trim(),
-      fullname
+      fullname: fullname || null
     });
     if (!worker) return res.status(400).json({ error: "No se pudo crear/obtener el trabajador" });
 
@@ -77,21 +70,18 @@ router.post("/", (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// POST /api/attendance/bulk  { crewId, items: [{doc,status,fullname?}, ...] }  (acepta también ?crewId=)
+// POST /api/attendance/bulk  (acepta crewId por body o query)
 router.post("/bulk", (req, res, next) => {
   try {
-    const crewFromBody  = req.body?.crewId;
-    const crewFromQuery = req.query?.crewId;
-    const crewId = Number(crewFromBody ?? crewFromQuery);
+    const crewId = Number(req.body?.crewId ?? req.query?.crewId);
     const { items } = req.body || {};
-
     console.log("POST /attendance/bulk", { crewId, count: Array.isArray(items) ? items.length : 0 });
 
     if (!crewId || !Array.isArray(items)) {
       return res.status(400).json({ error: "crewId e items son requeridos" });
     }
 
-    const tx = db.transaction((arr) => {
+    const tx = db.transaction(arr => {
       let count = 0;
       for (const it of arr) {
         const doc = (it.doc || "").toString().trim();
