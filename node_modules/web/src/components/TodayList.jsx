@@ -18,9 +18,7 @@ export default function TodayList({ crewId, refreshKey }) {
     }
   };
 
-  useEffect(() => {
-    load();
-  }, [crewId, refreshKey]);
+  useEffect(() => { load(); }, [crewId, refreshKey]);
 
   if (loading) return <div className="text-sm opacity-70">Cargando...</div>;
   if (!rows.length) return <div className="text-sm opacity-70">Sin registros aún.</div>;

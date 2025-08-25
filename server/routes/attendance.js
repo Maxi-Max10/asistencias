@@ -78,7 +78,7 @@ router.post("/bulk", (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// GET /api/attendance/today?crewId=1&date=YYYY-MM-DD
+// Lista de asistencias de HOY por finca
 router.get("/today", (req, res, next) => {
   try {
     const crewId = Number(req.query.crewId || 1);
@@ -95,8 +95,12 @@ router.get("/today", (req, res, next) => {
     `).all(date, crewId);
 
     res.json(rows);
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 });
+
+
 
 router.get("/export.csv", (req, res, next) => {
   try {

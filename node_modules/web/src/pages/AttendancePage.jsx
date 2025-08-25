@@ -3,11 +3,10 @@ import { useParams, Link } from "react-router-dom";
 import AttendanceRecorder from "../components/AttendanceRecorder";
 import TodayList from "../components/TodayList";
 
-export default function AttendancePage(){
+export default function AttendancePage() {
   const { id } = useParams();
   const crewId = Number(id) || 1;
 
-  // cada vez que guardamos, cambiamos esta key para forzar reload de la lista
   const [refreshKey, setRefreshKey] = useState(0);
   const handleSaved = () => setRefreshKey(k => k + 1);
 
