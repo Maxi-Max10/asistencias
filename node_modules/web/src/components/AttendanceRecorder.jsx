@@ -128,22 +128,39 @@ function extractPairsLatam(phrase){
   return Array.from(map, ([doc,status]) => ({ doc, status }));
 }
 
-export default function AttendanceRecorder({ crewId = 1, onSaved }){
-  const [doc, setDoc] = useState("");
-  const [status, setStatus] = useState("present");
-  const [lastHeard, setLastHeard] = useState("");
-  const { start, stop, active } = useSpeech(setLastHeard);
+ export default function AttendanceRecorder({ crewId = 1, onSaved }) {
+   const [doc, setDoc] = useState("");
+   const [status, setStatus] = useState("present");
+   const [lastHeard, setLastHeard] = useState("");
+   const { start, stop, active } = useSpeech(setLastHeard);
 
-  // === NUEVO: "forzar" carga por crewId (disparo fetch; si después querés, guardamos en estado y pintamos la lista) ===
-  useEffect(() => {
-    // Si no necesitás usar la respuesta todavía, al menos pegamos al endpoint correcto
-    fetch(`${API}/api/workers?crewId=${crewId}`, { cache: "no-store" }).catch(() => {});
-  }, [crewId]);
+   const queueRef = useRef(new Map());
+   const timerRef = useRef(null);
+   const sendingRef = useRef(false);
 
-  // Cola + debounce → /api/attendance/bulk
-  const queueRef = useRef(new Map()); // doc -> status
-  const timerRef = useRef(null);
-  const sendingRef = useRef(false);
+useEffect(() => {
+  // 1) cortar grabación si estaba activa (evita que quede escuchando a la finca anterior)
+  try { stop(); } catch (_) {}
+
+  // 2) limpiar cola/timer
+  queueRef.current.clear();
+  if (timerRef.current) {
+    clearTimeout(timerRef.current);
+    timerRef.current = null;
+  }
+
+  // 3) reset UI
+  setLastHeard("");
+  setDoc("");
+  setStatus("present");
+
+  // 4) (opcional) tocar el endpoint de workers de la nueva finca
+  fetch(`${API}/api/workers?crewId=${crewId}`, { cache: "no-store" }).catch(() => {});
+
+  // no hace falta cleanup aquí porque todo se vuelve a limpiar cuando cambia crewId
+}, [crewId]);
+
+
 
   const flushQueue = async () => {
     if (sendingRef.current) return;
