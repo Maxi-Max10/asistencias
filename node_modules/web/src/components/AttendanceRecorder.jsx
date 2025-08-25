@@ -128,7 +128,7 @@ function extractPairsLatam(phrase){
   return Array.from(map, ([doc,status]) => ({ doc, status }));
 }
 
-export default function AttendanceRecorder({ crewId = 1 }){
+export default function AttendanceRecorder({ crewId = 1, onSaved }){
   const [doc, setDoc] = useState("");
   const [status, setStatus] = useState("present");
   const [lastHeard, setLastHeard] = useState("");

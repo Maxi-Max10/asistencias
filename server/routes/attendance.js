@@ -78,16 +78,22 @@ router.post("/bulk", (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// GET /api/attendance/today?crewId=1&date=YYYY-MM-DD
 router.get("/today", (req, res, next) => {
   try {
-    const d = req.query.date || dayjs().format("YYYY-MM-DD");
+    const crewId = Number(req.query.crewId || 1);
+    const date = (req.query.date || dayjs().format("YYYY-MM-DD")).trim();
+
     const rows = db.prepare(`
-      SELECT a.id, a.date, a.status, w.fullname, IFNULL(w.doc,'') AS doc
+      SELECT a.id, a.date, a.status, IFNULL(a.notes,'') AS notes,
+             w.id AS worker_id, w.fullname, IFNULL(w.doc,'') AS doc,
+             w.crew_id
       FROM attendance a
       JOIN workers w ON w.id = a.worker_id
-      WHERE a.date = ?
+      WHERE a.date = ? AND w.crew_id = ?
       ORDER BY w.fullname
-    `).all(d);
+    `).all(date, crewId);
+
     res.json(rows);
   } catch (e) { next(e); }
 });

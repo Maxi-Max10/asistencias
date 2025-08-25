@@ -1,10 +1,15 @@
-import React from "react";
+import React, { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import AttendanceRecorder from "../components/AttendanceRecorder";
+import TodayList from "../components/TodayList";
 
 export default function AttendancePage(){
   const { id } = useParams();
   const crewId = Number(id) || 1;
+
+  // cada vez que guardamos, cambiamos esta key para forzar reload de la lista
+  const [refreshKey, setRefreshKey] = useState(0);
+  const handleSaved = () => setRefreshKey(k => k + 1);
 
   return (
     <div className="min-h-screen p-6 flex flex-col gap-4">
@@ -12,7 +17,9 @@ export default function AttendancePage(){
         <h1 className="text-xl font-bold">Asistencia — Finca {crewId}</h1>
         <Link to="/" className="underline">← Volver</Link>
       </div>
-      <AttendanceRecorder crewId={crewId} />
+
+      <AttendanceRecorder crewId={crewId} onSaved={handleSaved} />
+      <TodayList crewId={crewId} refreshKey={refreshKey} />
     </div>
   );
 }
