@@ -38,7 +38,7 @@ export default function TodayList({ crewId, refreshKey }) {
 
   return (
     <div className="mt-4 border rounded p-3">
-      <div className="font-semibold mb-2">Asistencias de hoy</div>
+      <div className="font-semibold mb-2">ASISTENCIA DE HOY</div>
       <ul className="space-y-1">
         {rows.map(r => (
           <li key={r.id} className="flex items-center justify-between border-b last:border-none py-1">
