@@ -33,6 +33,8 @@ export default function TodayList({ crewId, refreshKey }) {
     }
   };
 
+  console.log("ROWS:", rows);
+
   if (loading) return <div className="text-sm opacity-70">Cargando...</div>;
   if (!rows.length) return <div className="text-sm opacity-70">Sin registros aún.</div>;
 
