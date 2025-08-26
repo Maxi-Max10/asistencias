@@ -141,28 +141,26 @@ export default function AttendanceRecorder({ crewId = 1, onSaved }) {
     fetch(`${API}/api/workers?crewId=${crewId}`, { cache: "no-store" }).catch(() => {});
   }, [crewId, stop]);
 
-  const flushQueue = async () => {
-    if (sendingRef.current) return;
-    const items = Array.from(queueRef.current, ([d, s]) => ({ doc: d, status: s }));
-    if (!items.length) return;
-
-    sendingRef.current = true;
-    const currentCrew = Number(crewIdRef.current || 1);
-    try {
-      await fetch(`${API}/api/attendance/bulk?crewId=${currentCrew}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ crewId: currentCrew, items })
-      });
-      queueRef.current.clear();
-      setDoc("");
-      onSaved?.();
-    } catch (e) {
-      console.error("Registrar asistencia (bulk):", e);
-    } finally {
-      sendingRef.current = false;
-    }
-  };
+const flushQueue = async () => {
+  if (sendingRef.current) return;
+  const items = Array.from(queueRef.current, ([doc, status]) => ({ doc, status }));
+  if (!items.length) return;
+  sendingRef.current = true;
+  try {
+    await fetch(`${API}/api/attendance/bulk?crewId=${crewId}`, {   // 👈 query
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ crewId, items })                      // 👈 body
+    });
+    queueRef.current.clear();
+    setDoc("");
+    onSaved?.();
+  } catch(e){
+    console.error("Registrar asistencia (bulk):", e);
+  } finally {
+    sendingRef.current = false;
+  }
+};
 
   const enqueueItems = (items) => {
     for (const it of items) queueRef.current.set(it.doc, it.status);
@@ -219,21 +217,20 @@ export default function AttendanceRecorder({ crewId = 1, onSaved }) {
     if (singleDoc && st) enqueueItems([{ doc: singleDoc, status: st }]);
   }, [lastHeard]);
 
-  const postSingle = async (d, s) => {
-    if (!d || !s) return;
-    const currentCrew = Number(crewIdRef.current || 1);
-    try {
-      await fetch(`${API}/api/attendance?crewId=${currentCrew}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ crewId: currentCrew, doc: d, status: s })
-      });
-      setDoc("");
-      onSaved?.();
-    } catch (e) {
-      console.error("Registrar asistencia (single):", e);
-    }
-  };
+const postSingle = async (d, s) => {
+  if (!d || !s) return;
+  try {
+    await fetch(`${API}/api/attendance?crewId=${crewId}`, {   // 👈 query
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ crewId, doc: d, status: s })     // 👈 body
+    });
+    setDoc("");
+    onSaved?.();
+  } catch(e){
+    console.error("Registrar asistencia (single):", e);
+  }
+};
 
   return (
     <div className="border rounded p-3 space-y-3">

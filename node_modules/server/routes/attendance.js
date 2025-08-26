@@ -52,7 +52,8 @@ function upsertAttendance({ workerId, status, notes = "" }) {
 // body: { crewId, doc, status, fullname? }
 router.post("/", (req, res, next) => {
   try {
-    const { crewId, doc, status, fullname } = req.body || {};
+    const crewId = Number(req.body?.crewId ?? req.query?.crewId); // <= CLAVE
+    const { doc, status, fullname } = req.body || {};
     if (!crewId || !doc || !status) {
       return res.status(400).json({ error: "crewId, doc y status son requeridos" });
     }
@@ -72,7 +73,8 @@ router.post("/", (req, res, next) => {
 // body: { crewId, items: [{doc,status,fullname?}, ...] }
 router.post("/bulk", (req, res, next) => {
   try {
-    const { crewId, items } = req.body || {};
+    const crewId = Number(req.body?.crewId ?? req.query?.crewId); // <= CLAVE
+    const { items } = req.body || {};
     if (!crewId || !Array.isArray(items)) {
       return res.status(400).json({ error: "crewId e items son requeridos" });
     }
