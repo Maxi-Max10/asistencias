@@ -55,7 +55,13 @@ CREATE TABLE IF NOT EXISTS attendance (
 // Migraciones suaves
 const hasDoc = db.prepare(`SELECT 1 FROM pragma_table_info('workers') WHERE name='doc'`).get();
 if (!hasDoc) db.exec(`ALTER TABLE workers ADD COLUMN doc TEXT`);
+
+// Elimina índice único global si existe
 const hasDocIdx = db.prepare(`SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_workers_doc'`).get();
-if (!hasDocIdx) db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_workers_doc ON workers(doc)`);
+if (hasDocIdx) db.exec(`DROP INDEX idx_workers_doc`);
+
+// Crea índice único por crew_id + doc
+const hasCrewDocIdx = db.prepare(`SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_workers_crew_doc'`).get();
+if (!hasCrewDocIdx) db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_workers_crew_doc ON workers(crew_id, doc)`);
 
 module.exports = db;

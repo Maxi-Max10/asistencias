@@ -10,14 +10,9 @@ const router = express.Router();
 function upsertWorkerByDoc({ crewId, doc, fullname = null }) {
   if (!doc || !crewId) return null;
 
-  const w = db.prepare(`SELECT * FROM workers WHERE doc = ?`).get(doc);
-  if (w) {
-    if (w.crew_id !== crewId) {
-      db.prepare(`UPDATE workers SET crew_id = ? WHERE id = ?`).run(crewId, w.id);
-      return { ...w, crew_id: crewId };
-    }
-    return w;
-  }
+  // Busca por crewId y doc
+  const w = db.prepare(`SELECT * FROM workers WHERE crew_id = ? AND doc = ?`).get(crewId, doc);
+  if (w) return w;
 
   const name = fullname && fullname.trim() ? fullname.trim() : doc;
   const info = db

@@ -26,7 +26,8 @@ router.post("/", (req, res, next) => {
     if (!doc) return res.status(400).json({ error: "doc requerido" });
 
     const ndoc = normDoc(doc);
-    const byDoc = db.prepare("SELECT id, fullname, doc FROM workers WHERE doc = ?").get(ndoc);
+    // Busca por crew y doc
+    const byDoc = db.prepare("SELECT id, fullname, doc FROM workers WHERE crew_id = ? AND doc = ?").get(crew, ndoc);
     if (byDoc) return res.json(byDoc);
 
     const name = (fullname && String(fullname).trim()) || ndoc;
