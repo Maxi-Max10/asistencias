@@ -23,6 +23,16 @@ export default function TodayList({ crewId, refreshKey }) {
     return () => { cancelled = true; };
   }, [crewId, refreshKey]);
 
+  const handleDelete = async (id) => {
+    if (!window.confirm("¿Eliminar esta carga de asistencia?")) return;
+    try {
+      await fetch(`${API}/api/attendance/${id}`, { method: "DELETE" });
+      setRows(rows.filter(r => r.id !== id));
+    } catch (e) {
+      alert("No se pudo eliminar la asistencia.");
+    }
+  };
+
   if (loading) return <div className="text-sm opacity-70">Cargando...</div>;
   if (!rows.length) return <div className="text-sm opacity-70">Sin registros aún.</div>;
 
@@ -39,6 +49,13 @@ export default function TodayList({ crewId, refreshKey }) {
             <span className={`text-xs px-2 py-1 rounded ${r.status === 'present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
               {r.status === 'present' ? 'Presente' : 'Ausente'}
             </span>
+            <button
+              className="ml-4 text-xs text-red-600 hover:underline"
+              onClick={() => handleDelete(r.id)}
+              title="Eliminar asistencia"
+            >
+              Eliminar
+            </button>
           </li>
         ))}
       </ul>

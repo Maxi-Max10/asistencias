@@ -126,4 +126,19 @@ router.get("/today", (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// Eliminar una carga de asistencia por ID
+// DELETE /api/attendance/:id
+router.delete("/:id", (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!id) return res.status(400).json({ error: "ID requerido" });
+
+    const info = db.prepare(`DELETE FROM attendance WHERE id = ?`).run(id);
+    if (info.changes === 0) {
+      return res.status(404).json({ error: "No se encontró la asistencia" });
+    }
+    res.json({ ok: true, deleted: id });
+  } catch (e) { next(e); }
+});
+
 module.exports = router;
