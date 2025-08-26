@@ -59,9 +59,7 @@ export default function App() {
     );
   }
 
-  return null;
-
-  return (
+    return (
     <div className="p-4 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Asistencia de Cuadrilla</h1>
       {err && <div className="mb-3 p-2 bg-red-100 text-red-700 rounded">{err}</div>}
@@ -97,3 +95,7 @@ export default function App() {
     </div>
   );
 }
+
+  return null;
+
+
