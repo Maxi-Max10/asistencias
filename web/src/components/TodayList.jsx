@@ -41,16 +41,19 @@ export default function TodayList({ crewId, refreshKey }) {
       <div className="font-semibold mb-2">ASISTENCIA DE HOY</div>
       <ul className="space-y-1">
         {rows.map(r => (
-          <li key={r.id} className="flex items-center justify-between border-b last:border-none py-1">
-            <div>
+          <li
+            key={r.id}
+            className="flex items-center justify-between border-b last:border-none py-1"
+          >
+            <div className="flex-1">
               <div className="font-medium">{r.fullname || r.doc}</div>
               {r.doc ? <div className="text-xs opacity-70">{r.doc}</div> : null}
             </div>
-            <span className={`text-xs px-2 py-1 rounded ${r.status === 'present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            <span className={`mx-2 text-xs px-2 py-1 rounded ${r.status === 'present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
               {r.status === 'present' ? 'Presente' : 'Ausente'}
             </span>
             <button
-              className="ml-4 text-xs text-red-600 hover:underline"
+              className="text-xs font-bold text-white bg-red-500 px-2 py-1 rounded hover:bg-red-700 ml-2"
               onClick={() => handleDelete(r.id)}
               title="Eliminar asistencia"
             >
