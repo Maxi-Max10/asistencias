@@ -54,12 +54,13 @@ export default function TodayList({ crewId, refreshKey }) {
             <span className={`mx-2 text-xs px-2 py-1 rounded ${r.status === 'present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
               {r.status === 'present' ? 'Presente' : 'Ausente'}
             </span>
+            <span style={{ background: "yellow", color: "black", padding: 4 }}>PRUEBA</span>
             <button
-              className="text-xs font-bold text-white bg-red-500 px-2 py-1 rounded hover:bg-red-700 ml-2"
+              style={{ display: "inline-block", background: "red", color: "white", padding: "6px 12px", borderRadius: "6px", marginLeft: "12px", border: "2px solid black", fontWeight: "bold", zIndex: 1000 }}
               onClick={() => handleDelete(r.id)}
               title="Eliminar asistencia"
             >
-              Eliminar
+              ELIMINAR
             </button>
           </li>
         ))}

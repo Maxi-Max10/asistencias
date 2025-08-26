@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from "react";
 import AttendanceRecorder from "./components/AttendanceRecorder";
+import Login from "./components/Login";
+import TodayList from "./components/TodayList";
 
 const API = import.meta.env.VITE_API || "http://127.0.0.1:4000";
 
 export default function App() {
   const [today, setToday] = useState([]);
   const [err, setErr] = useState("");
+  const [role, setRole] = useState(null);
 
   const load = async () => {
     setErr("");
@@ -32,6 +35,31 @@ export default function App() {
       alert("No se pudo eliminar: " + e.message);
     }
   };
+
+  if (!role) {
+    return <Login onLogin={setRole} />;
+  }
+
+  if (role === "cuadrillero") {
+    return (
+      <div>
+        <h1>Vista Cuadrillero</h1>
+        <TodayList crewId={1} />
+      </div>
+    );
+  }
+
+  if (role === "admin") {
+    return (
+      <div>
+        <h1>Vista Administrador</h1>
+        {/* Aquí luego agregamos las funcionalidades de admin */}
+        <TodayList crewId={1} />
+      </div>
+    );
+  }
+
+  return null;
 
   return (
     <div className="p-4 max-w-3xl mx-auto">
