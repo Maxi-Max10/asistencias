@@ -13,7 +13,7 @@ export default function Home(){
   return (
     <div className="min-h-screen p-6 flex flex-col gap-6">
       <header>
-        <h1 className="text-2xl font-bold">¡Bienvenido! Seleccione finca</h1>
+        <h1 className="text-2xl font-bold">¡Bienvenidosss! Seleccione finca</h1>
         <p className="text-sm opacity-70">Elija una cuadrilla para cargar asistencia.</p>
       </header>
 
