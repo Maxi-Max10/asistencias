@@ -73,8 +73,13 @@ router.post("/", (req, res, next) => {
 // body: { crewId, items: [{doc,status,fullname?}, ...] }
 router.post("/bulk", (req, res, next) => {
   try {
-    const crewId = Number(req.body?.crewId ?? req.query?.crewId); // <= CLAVE
-    const { items } = req.body || {};
+    console.log("POST /attendance/bulk", {
+      crewId: req.body?.crewId,
+      count: req.body?.items?.length,
+      body: req.body,
+    });
+
+    const { crewId, items } = req.body || {};
     if (!crewId || !Array.isArray(items)) {
       return res.status(400).json({ error: "crewId e items son requeridos" });
     }
@@ -97,9 +102,13 @@ router.post("/bulk", (req, res, next) => {
     });
 
     const count = tx(items);
-    res.json({ ok: true, count });
-  } catch (e) { next(e); }
+    return res.json({ ok: true, count });
+  } catch (e) {
+    console.error("🔥 ERROR en /attendance/bulk:", e);  // 👈 agregá esto
+    return res.status(500).json({ error: "internal_error", detail: String(e) });
+  }
 });
+
 
 // Listado del día por cuadrilla
 // GET /api/attendance/today?crewId=2&date=YYYY-MM-DD
