@@ -1,3 +1,4 @@
+import Login from "../components/Login.jsx";
 import React from "react";
 import { Link } from "react-router-dom";
 
@@ -10,7 +11,17 @@ const FINCAS = [
 ];
 
 export default function Home(){
+    const role = typeof window !== 'undefined' ? window.localStorage.getItem('role') : null;
+  if (!role) {
+    return (
+      <Login onLogin={(r) => {
+        window.localStorage.setItem('role', r);
+        window.location.reload();
+      }} />
+    );
+  }
   return (
+    
     <div className="min-h-screen p-6 flex flex-col gap-6">
       <header>
         <h1 className="text-2xl font-bold">¡Bienvenidosss! Seleccione finca</h1>

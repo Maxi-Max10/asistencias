@@ -1,3 +1,4 @@
+import Login from "../components/Login.jsx";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 
@@ -109,6 +110,15 @@ function extractPairsLatam(phrase){
 
 /* ======== Página ======== */
 export default function AttendancePage(){
+    const role = typeof window !== 'undefined' ? window.localStorage.getItem('role') : null;
+  if (!role) {
+    return (
+      <Login onLogin={(r) => {
+        window.localStorage.setItem('role', r);
+        window.location.reload();
+      }} />
+    );
+  }
   const params = useParams(); // /finca/:id
   const crewId = useMemo(()=> Number(params.id || 1), [params.id]);
 

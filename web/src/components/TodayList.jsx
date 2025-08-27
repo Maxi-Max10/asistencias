@@ -4,66 +4,79 @@ const API = import.meta.env.VITE_API || "http://127.0.0.1:4000";
 export default function TodayList({ crewId, refreshKey }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const role = typeof window !== "undefined" ? window.localStorage.getItem("role") : null;
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        setLoading(true);
-        const r = await fetch(`${API}/api/attendance/today?crewId=${crewId}`, { cache: "no-store" });
-        const data = await r.json();
-        if (!cancelled) setRows(Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.error("Cargar asistencias de hoy:", e);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    load();
-    return () => { cancelled = true; };
-  }, [crewId, refreshKey]);
+  async function load() {
+    try {
+      setLoading(true);
+      const r = await fetch(`${API}/api/attendance/today?crewId=${crewId}`, { cache: "no-store" });
+      const data = await r.json();
+      setRows(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, [crewId, refreshKey]);
 
   const handleDelete = async (id) => {
-    if (!window.confirm("¿Eliminar esta carga de asistencia?")) return;
+    if (!id) return;
+    if (!confirm("¿Eliminar este registro?")) return;
     try {
-      await fetch(`${API}/api/attendance/${id}`, { method: "DELETE" });
-      setRows(rows.filter(r => r.id !== id));
+      const r = await fetch(`${API}/api/attendance/${id}`, { method: "DELETE" });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        alert(`No se pudo eliminar: ${err.error || r.statusText}`);
+      } else {
+        await load();
+      }
     } catch (e) {
-      alert("No se pudo eliminar la asistencia.");
+      console.error(e);
+      alert("Error eliminando el registro");
     }
   };
 
-  console.log("ROWS:", rows);
-
-  if (loading) return <div className="text-sm opacity-70">Cargando...</div>;
-  if (!rows.length) return <div className="text-sm opacity-70">Sin registros aún.</div>;
-
   return (
-    <div className="mt-4 border rounded p-3">
-      <div className="font-semibold mb-2">ASISTENCIA DE HOY</div>
-      <ul className="space-y-1">
-        {rows.map(r => (
-          <li
-            key={r.id}
-            className="flex items-center justify-between border-b last:border-none py-1"
-          >
-            <div className="flex-1">
-              <div className="font-medium">{r.fullname || r.doc}</div>
-              {r.doc ? <div className="text-xs opacity-70">{r.doc}</div> : null}
+    <div className="bg-white rounded-xl shadow p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold">Asistencias de hoy</h3>
+        {loading && <span className="text-sm opacity-70">Cargando...</span>}
+      </div>
+
+      <ul className="divide-y">
+        {rows.map((r) => (
+          <li key={r.id} className="py-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="font-medium truncate">{r.fullname || r.doc}</div>
+              <div className="text-xs text-gray-500 truncate">{r.doc}</div>
             </div>
-            <span className={`mx-2 text-xs px-2 py-1 rounded ${r.status === 'present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-              {r.status === 'present' ? 'Presente' : 'Ausente'}
-            </span>
-            <span style={{ background: "yellow", color: "black", padding: 4 }}>PRUEBA</span>
-            <button
-              style={{ display: "inline-block", background: "red", color: "white", padding: "6px 12px", borderRadius: "6px", marginLeft: "12px", border: "2px solid black", fontWeight: "bold", zIndex: 1000 }}
-              onClick={() => handleDelete(r.id)}
-              title="Eliminar asistencia"
-            >
-              ELIMINAR
-            </button>
+            <div className="flex items-center gap-2">
+              <span
+                className={`text-xs px-2 py-1 rounded ${
+                  r.status === "present"
+                    ? "bg-green-100 text-green-700"
+                    : "bg-rose-100 text-rose-700"
+                }`}
+              >
+                {r.status === "present" ? "Presente" : "Ausente"}
+              </span>
+              {role === "admin" && (
+                <button
+                  onClick={() => handleDelete(r.id)}
+                  title="Eliminar asistencia"
+                  className="text-xs px-2 py-1 border rounded hover:bg-rose-50"
+                >
+                  🗑 Eliminar
+                </button>
+              )}
+            </div>
           </li>
         ))}
+        {!rows.length && !loading && (
+          <li className="py-3 text-gray-500">Sin registros hoy.</li>
+        )}
       </ul>
     </div>
   );
