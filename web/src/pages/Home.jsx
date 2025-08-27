@@ -1,6 +1,7 @@
 import Login from "../components/Login.jsx";
 import React from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 
 const FINCAS = [
   { id: 1, name: "Finca A", color: "bg-blue-600" },
@@ -10,26 +11,38 @@ const FINCAS = [
   { id: 5, name: "Finca E", color: "bg-rose-600" },
 ];
 
-export default function Home(){
-    const role = typeof window !== 'undefined' ? window.localStorage.getItem('role') : null;
+export default function Home() {
+  const { logout } = useAuth();
+  const role =
+    typeof window !== "undefined" ? window.localStorage.getItem("role") : null;
+
   if (!role) {
     return (
-      <Login onLogin={(r) => {
-        window.localStorage.setItem('role', r);
-        window.location.reload();
-      }} />
+      <Login
+        onLogin={(r) => {
+          window.localStorage.setItem("role", r);
+          window.location.reload();
+        }}
+      />
     );
   }
+
   return (
-    
     <div className="min-h-screen p-6 flex flex-col gap-6">
-      <header>
-        <h1 className="text-2xl font-bold">¡Bienvenidosss! Seleccione finca</h1>
-        <p className="text-sm opacity-70">Elija una cuadrilla para cargar asistencia.</p>
+      <header
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 32,
+        }}
+      >
+        <h1 className="text-2xl font-bold">¡Bienvenidos! Seleccione finca</h1>
+        <button onClick={() => logout && logout()}>Cerrar sesión</button>
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {FINCAS.map(f => (
+        {FINCAS.map((f) => (
           <Link
             key={f.id}
             to={`/finca/${f.id}`}

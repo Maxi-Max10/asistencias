@@ -1,7 +1,7 @@
 import Login from "../components/Login.jsx";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 const API = import.meta.env.VITE_API || "http://127.0.0.1:4000";
 
 /* ======== Speech ======== */
@@ -109,18 +109,21 @@ function extractPairsLatam(phrase){
 }
 
 /* ======== Página ======== */
-export default function AttendancePage(){
-    const role = typeof window !== 'undefined' ? window.localStorage.getItem('role') : null;
-  if (!role) {
-    return (
-      <Login onLogin={(r) => {
-        window.localStorage.setItem('role', r);
-        window.location.reload();
-      }} />
-    );
-  }
+export default function AttendancePage() {
+  const { logout, role } = useAuth();
+  const navigate = useNavigate();
   const params = useParams(); // /finca/:id
-  const crewId = useMemo(()=> Number(params.id || 1), [params.id]);
+  const crewId = useMemo(() => Number(params.id || 1), [params.id]);
+
+  // if user lost role or is not cuadrillero, redirect
+  useEffect(() => {
+    if (!role) {
+      navigate("/", { replace: true });
+    } else if (role !== "cuadrillero") {
+      // optional: admins see dashboard
+      navigate("/", { replace: true });
+    }
+  }, [role, navigate]);
 
   const [doc, setDoc] = useState("");
   const [status, setStatus] = useState("present");
@@ -128,7 +131,7 @@ export default function AttendancePage(){
   const [rows, setRows] = useState([]);
   const { start, stop, active } = useSpeech(setLastHeard);
 
-  const queueRef = useRef(new Map()); // doc -> status
+  const queueRef = useRef(new Map());
   const timerRef = useRef(null);
   const sendingRef = useRef(false);
 
@@ -234,6 +237,24 @@ export default function AttendancePage(){
         <h1 className="text-2xl font-semibold">Asistencia — Finca {crewId}</h1>
         <Link to="/" className="text-sm">← Volver</Link>
       </div>
+
+      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h2>Asistencia — Cuadrillero</h2>
+        <button
+          onClick={() => { logout && logout(); }}
+          style={{
+            background: "#ef4444",
+            color: "white",
+            border: "none",
+            borderRadius: 4,
+            padding: "6px 12px",
+            cursor: "pointer",
+            fontWeight: "bold"
+          }}
+        >
+          Cerrar sesión
+        </button>
+      </header>
 
       <div className="border rounded p-3 space-y-3">
         <div className="flex items-center gap-2">

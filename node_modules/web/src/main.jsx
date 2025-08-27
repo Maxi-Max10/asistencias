@@ -1,18 +1,16 @@
-import { StrictMode } from 'react'
-import ReactDOM from 'react-dom/client'
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import App from "./App";
+import { AuthProvider } from "./contexts/AuthContext";
+import "./index.css";
 
-import './index.css'
-import Home from './pages/Home.jsx'
-import AttendancePage from './pages/AttendancePage.jsx'
-
-const router = createBrowserRouter([
-  { path: '/', element: <Home /> },
-  { path: '/finca/:id', element: <AttendancePage /> },
-])
-
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <RouterProvider router={router} />
-  </StrictMode>,
-)
+createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <AuthProvider>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </AuthProvider>
+  </React.StrictMode>
+);
