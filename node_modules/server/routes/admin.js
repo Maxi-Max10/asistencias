@@ -80,18 +80,22 @@ router.get("/dashboard", (req, res, next) => {
 
     const topFincas = (topRows || []).map(r => ({
       id: r.id,
-      name: `Finca ${r.id}`,
+      name: `Cuadrilla ${r.id}`,
       filas: r.filas || 0,
       asistencias: r.asistencias || 0,
     }));
 
     // Recent records (últimos 30)
     const recent = db.prepare(`
-      SELECT a.id, a.date, a.status, w.id as workerId, w.fullname, w.doc, w.crew_id
-      FROM attendance a
-      JOIN workers w ON a.worker_id = w.id
-      ORDER BY a.date DESC, a.id DESC
-      LIMIT 30
+      SELECT
+  a.id, a.date, a.status,
+  w.id AS workerId,
+  w.fullname, w.doc,
+  w.crew_id AS fincaId      
+FROM attendance a
+JOIN workers w ON a.worker_id = w.id
+ORDER BY a.date DESC, a.id DESC
+LIMIT 30;
     `).all().map(r => ({
       id: r.id,
       date: r.date,
