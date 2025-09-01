@@ -1,3 +1,4 @@
+
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -45,7 +46,7 @@ function todayLocal() {
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, "0");
   const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return `${y}-${m}-${d}`; // día local
 }
 
 function toISODate(d) {
@@ -58,19 +59,21 @@ function toISODate(d) {
   try { return new Date(d).toISOString().slice(0, 10); } catch { return ""; }
 }
 
-// "Cuadrilla 3", "C3", "3" -> "Finca 3"
+// Si te pasan "Cuadrilla 3", "C3" o solo "3" -> "Finca 3"
 function asFincaName(raw) {
   if (raw == null || raw === "-") return "-";
   const s = String(raw).trim();
   const m = s.match(/\d+$/);
   const num = m ? m[0] : "";
+
   if (/^cuadrilla/i.test(s)) return `Finca ${num || s.replace(/^cuadrilla/i, "").trim()}`;
   if (/^c\d+$/i.test(s)) return `Finca ${s.slice(1)}`;
   if (/^\d+$/.test(s)) return `Finca ${s}`;
   if (/^finca/i.test(s)) return s;
-  return s;
+  return s; // nombre libre
 }
 
+// Cuando viene id/numero en distintos campos -> "3"
 function getFincaId(r) {
   const v =
     r?.fincaId ??
@@ -85,6 +88,7 @@ function getFincaId(r) {
   return match ? match[0] : String(v);
 }
 
+// Asistencias robusto
 function getAsistencias(r) {
   if (!r) return 0;
   if (r.asistencias != null && !isNaN(Number(r.asistencias))) return Number(r.asistencias);
@@ -190,7 +194,7 @@ export default function AdminDashboard() {
   }, [range]);
 
   const weekly = stats?.weekly || { labels: [], filas: [], asistencias: [], meta: [] };
-  const topFincasRaw = stats?.topFincas || [];          // <-- UNA sola vez
+  const topFincas = stats?.topFincas || [];
   const recent = stats?.recent || [];
 
   const filteredRecent = recent
@@ -225,10 +229,11 @@ export default function AdminDashboard() {
     [weekly]
   );
 
+  // Top fincas -> normaliza a "Finca X"
   const barData = useMemo(
     () =>
-      (topFincasRaw.length
-        ? topFincasRaw
+      (topFincas.length
+        ? topFincas
         : [
             { name: "Cuadrilla 1", filas: 7, asistencias: 6 },
             { name: "Cuadrilla 4", filas: 3, asistencias: 2 },
@@ -241,7 +246,7 @@ export default function AdminDashboard() {
         filas: Number(f.filas ?? 0),
         asistencias: Number(f.asistencias ?? 0),
       })),
-    [topFincasRaw]
+    [topFincas]
   );
 
   if (loading) {
@@ -263,255 +268,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen p-6 text-slate-200" style={{ backgroundColor: "rgb(30,34,43)" }}>
-      {/* Topbar */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="inline-flex items-center gap-2 text-xs text-slate-400">
-            <span>Inicio</span>
-            <span>›</span>
-            <span className="text-slate-200/90">Panel</span>
-          </div>
-          <h1 className="mt-1 text-2xl md:text-3xl font-extrabold tracking-tight text-white">Dashboard — Administrador</h1>
-          <p className="text-sm text-slate-400 mt-1">Métricas, fincas top y registros recientes</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <ToggleGroup
-            type="single"
-            value={range}
-            onValueChange={(v) => v && setRange(v)}
-            className="rounded-xl border border-white/10 bg-[#2A3040] p-1"
-          >
-            <ToggleGroupItem value="week" className="data-[state=on]:bg-indigo-600 data-[state=on]:text-white text-slate-200">
-              Semana
-            </ToggleGroupItem>
-            <ToggleGroupItem value="month" className="data-[state=on]:bg-indigo-600 data-[state=on]:text-white text-slate-200">
-              Mes
-            </ToggleGroupItem>
-          </ToggleGroup>
-          <input
-            type="date"
-            value={day}
-            onChange={(e) => setDay(e.target.value)}
-            className="h-9 rounded-md border border-white/10 bg-[#2A3040] px-3 text-sm text-slate-200 placeholder:text-slate-400"
-            title="Filtrar por día"
-          />
-          <Button
-            variant="secondary"
-            className="border-white/10 bg-[#2A3040] text-slate-200 hover:bg-[#343B4E]"
-            onClick={() => downloadCSV(filteredRecent, `recent-${day}.csv`)}
-          >
-            <Download className="mr-2 h-4 w-4" /> CSV
-          </Button>
-          <Button variant="destructive" className="bg-rose-600 hover:bg-rose-500 text-white" onClick={() => logout && logout()}>
-            <LogOut className="mr-2 h-4 w-4" /> Cerrar sesión
-          </Button>
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        <Kpi title="Total Asistencias (Cuadrilleros)" value={stats?.totalAsistencias ?? 0} delta={stats?.deltas?.asistencias ?? 4} gradient="from-indigo-500 to-indigo-400" icon={<Check size={18} />} />
-        <Kpi title="Cuadrilleros" value={stats?.cuadrillerosUnicos ?? 0} delta={stats?.deltas?.cuadrilleros ?? 1} gradient="from-emerald-400 to-emerald-500" icon={<Users size={18} />} />
-        <Kpi title="Filas hechas" value={stats?.filasHechas ?? 0} delta={stats?.deltas?.filas ?? 6} gradient="from-amber-400 to-orange-500" icon={<BarChart2 size={18} />} />
-        <Kpi title="Prom. filas/cuadrillero" value={stats?.promFilasCuadrillero ? Number(stats.promFilasCuadrillero).toFixed(1) : "0.0"} delta={stats?.deltas?.prom ?? 0} gradient="from-fuchsia-500 to-pink-500" icon={<BarChart2 size={18} />} />
-      </div>
-
-      {/* Chart full width */}
-      <div className="mb-6">
-
-{/* ====== Estado de la cosecha (nuevo estilo) ====== */}
-<SurfaceCard className="w-full">
-  <CardHeader className="pb-0">
-    <div className="flex items-start justify-between gap-4">
-      <div>
-        <CardTitle className="text-slate-100 text-[28px] leading-tight">
-          Estado de la Cosecha
-        </CardTitle>
-        <CardDescription className="text-slate-400">
-          Temporada: {new Date().toLocaleString("es-AR", { month: "long", year: "numeric" })}
-        </CardDescription>
-      </div>
-
-      {/* Controles estilo Hoy / Semana / Mes / Año */}
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          className={`h-8 rounded-md border-white/10 text-slate-200 bg-[#2A3040] ${
-            range === "today" ? "bg-indigo-600 text-white border-transparent" : ""
-          }`}
-          onClick={() => setRange("today")} disabled
-          title="(Deshabilitado por ahora)"
-        >
-          Hoy
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className={`h-8 rounded-md border-white/10 text-slate-200 bg-[#2A3040] ${
-            range === "week" ? "bg-indigo-600 text-white border-transparent" : ""
-          }`}
-          onClick={() => setRange("week")}
-        >
-          Semana
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className={`h-8 rounded-md border-white/10 text-slate-200 bg-[#2A3040] ${
-            range === "month" ? "bg-indigo-600 text-white border-transparent" : ""
-          }`}
-          onClick={() => setRange("month")}
-        >
-          Mes
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className={`h-8 rounded-md border-white/10 text-slate-200 bg-[#2A3040] ${
-            range === "year" ? "bg-indigo-600 text-white border-transparent" : ""
-          }`}
-          onClick={() => setRange("year")} disabled
-          title="(Deshabilitado por ahora)"
-        >
-          Año
-        </Button>
-
-        <Button size="sm" className="h-8 bg-indigo-600 hover:bg-indigo-500 text-white" title="Exportar imagen (pendiente)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="mr-0.5">
-            <path d="M12 5v10m0 0l-4-4m4 4l4-4M4 19h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </Button>
-      </div>
-    </div>
-  </CardHeader>
-
-  <CardContent className="pt-4">
-    <div style={{ height: 420 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart
-          data={lineData}
-          margin={{ top: 12, right: 28, left: 8, bottom: 8 }}
-        >
-          {/* Gradientes para rellenos suaves */}
-          <defs>
-            <linearGradient id="fillBlue" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#7287FD" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#7287FD" stopOpacity="0.04" />
-            </linearGradient>
-            <linearGradient id="fillGreen" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#34D399" stopOpacity="0.25" />
-              <stop offset="100%" stopColor="#34D399" stopOpacity="0.03" />
-            </linearGradient>
-          </defs>
-
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-          <XAxis dataKey="dia" stroke="#A3B1C6" tickLine={false} axisLine={false} />
-          <YAxis
-            yAxisId="left"
-            stroke="#A3B1C6"
-            tickLine={false}
-            axisLine={false}
-            domain={[0, (dataMax) => Math.max(60, Math.ceil((dataMax + 5) / 5) * 5)]}
-          />
-          <YAxis
-            yAxisId="right"
-            orientation="right"
-            stroke="#A3B1C6"
-            tickLine={false}
-            axisLine={false}
-            domain={[0, (dataMax) => Math.max(10, Math.ceil((dataMax + 1) / 1) * 1)]}
-          />
-
-          {/* Tooltip dark */}
-          <Tooltip
-            contentStyle={{
-              backgroundColor: "#242A38",
-              border: "1px solid rgba(255,255,255,0.08)",
-              color: "#E5E7EB",
-            }}
-            formatter={(v, name) =>
-              typeof v === "number" ? [v.toLocaleString("es-AR"), name] : [v, name]
-            }
-          />
-
-          {/* Leyenda custom (cajas de color + línea punteada) */}
-          {/* Leyenda custom (centrada) */}
-          <Legend
-            verticalAlign="top"
-            height={40}
-            content={() => (
-              <div className="flex w-full items-center justify-center gap-8 px-2 pb-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="inline-block h-3 w-5 rounded-sm"
-                    style={{ background: "#7287FD" }}
-                  />
-                  <span className="text-slate-200">Filas hechas</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className="inline-block h-3 w-5 rounded-sm"
-                    style={{ background: "#34D399" }}
-                  />
-                  <span className="text-slate-200">Asistencias</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className="inline-block h-[2px] w-5 border-t border-dashed"
-                    style={{ borderColor: "#F87171" }}
-                  />
-                  <span className="text-slate-200">Meta diaria</span>
-                </div>
-              </div>
-            )}
-          />
-
-
-          {/* Línea meta punteada (misma altura que tu weekly.meta promedio o 55 por defecto) */}
-          <ReferenceLine
-            y={Number(weekly.meta?.[0] ?? 55)}
-            yAxisId="left"
-            stroke="#F87171"
-            strokeDasharray="8 6"
-          />
-
-          {/* Filas (línea azul con área) */}
-          <Line
-            yAxisId="left"
-            type="monotone"
-            dataKey="filas"
-            name="Filas hechas"
-            stroke="#7287FD"
-            strokeWidth={2.6}
-            dot={{ r: 3, stroke: "#7287FD", strokeWidth: 1.5, fill: "#0f172a" }}
-            activeDot={{ r: 5 }}
-            fill="url(#fillBlue)"
-            fillOpacity={1}
-          />
-
-          {/* Asistencias (línea verde con área) */}
-          <Line
-            yAxisId="right"
-            type="monotone"
-            dataKey="asistencias"
-            name="Asistencias"
-            stroke="#34D399"
-            strokeWidth={2.2}
-            dot={{ r: 3, stroke: "#34D399", strokeWidth: 1.4, fill: "#0f172a" }}
-            activeDot={{ r: 5 }}
-            fill="url(#fillGreen)"
-            fillOpacity={1}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  </CardContent>
-</SurfaceCard>
-
-      </div>
-
-      {/* Top fincas */}
+      {/* Top fincas (abajo) */}
       <div className="mb-6">
         <SurfaceCard className="w-full">
           <CardHeader className="pb-2">
@@ -536,6 +293,7 @@ export default function AdminDashboard() {
                 barData.map((f, i) => (
                   <div key={i} className="flex items-center justify-between py-2">
                     <div className="flex items-center gap-3">
+                      {/* Badge ahora "F" */}
                       <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-600 to-pink-500 text-white flex items-center justify-center text-sm font-semibold">
                         F
                       </div>
@@ -557,7 +315,7 @@ export default function AdminDashboard() {
         </SurfaceCard>
       </div>
 
-      {/* Registros recientes */}
+      {/* Registros recientes (por día) */}
       <SurfaceCard className="w-full">
         <CardHeader className="pb-2">
           <CardTitle className="text-slate-100">Registros recientes</CardTitle>
@@ -608,15 +366,14 @@ export default function AdminDashboard() {
                       const s = String(raw).slice(0, 10);
                       const iso = /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : toISODate(raw);
                       const fechaText = iso ? iso.split("-").reverse().join("/") : "-";
-                      const fincaText = asFincaName(r.finca ?? r.crewName ?? r.crewId ?? r.crew_id ?? "-");
-
+                      const fincaText = asFincaName(r.finca ?? r.crewName ?? getFincaId(r));
                       return (
                         <TableRow key={r.id ?? i} className="hover:bg-white/5">
                           <TableCell className="font-medium text-slate-100">
                             {r.nombre ?? r.fullname ?? r.doc ?? "-"}
                           </TableCell>
                           <TableCell className="font-mono text-slate-200">{r.dni ?? r.doc ?? "-"}</TableCell>
-                          <TableCell className="truncate text-slate-200">{asFincaName(r.crewId)}</TableCell>
+                          <TableCell className="truncate text-slate-200">{fincaText}</TableCell>
                           <TableCell className="text-slate-200">{fechaText}</TableCell>
                           <TableCell className="text-right text-slate-200">{getAsistencias(r)}</TableCell>
                           <TableCell className="text-right text-slate-200">{r.filas ?? 0}</TableCell>
@@ -630,10 +387,6 @@ export default function AdminDashboard() {
           </div>
         </CardContent>
       </SurfaceCard>
-
-      <p className="mt-6 text-[11px] text-slate-400">
-        UI basada en <b>shadcn/ui</b> + <b>lucide-react</b> + <b>Recharts</b>. Dark-mode friendly.
-      </p>
     </div>
   );
 }

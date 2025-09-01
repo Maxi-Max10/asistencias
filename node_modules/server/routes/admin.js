@@ -85,26 +85,27 @@ router.get("/dashboard", (req, res, next) => {
       asistencias: r.asistencias || 0,
     }));
 
-    // Recent records (últimos 30)
-    const recent = db.prepare(`
-      SELECT
-  a.id, a.date, a.status,
-  w.id AS workerId,
-  w.fullname, w.doc,
-  w.crew_id AS fincaId      
-FROM attendance a
-JOIN workers w ON a.worker_id = w.id
-ORDER BY a.date DESC, a.id DESC
-LIMIT 30;
-    `).all().map(r => ({
-      id: r.id,
-      date: r.date,
-      status: r.status,
-      workerId: r.workerId,
-      fullname: r.fullname,
-      doc: r.doc,
-      crewId: r.crew_id
-    }));
+// Recent records (últimos 30)
+const recent = db.prepare(`
+  SELECT
+    a.id, a.date, a.status,
+    w.id         AS workerId,
+    w.fullname, w.doc,
+    w.crew_id    AS crewId   -- 👈 usamos crewId directo
+  FROM attendance a
+  JOIN workers w ON a.worker_id = w.id
+  ORDER BY a.date DESC, a.id DESC
+  LIMIT 30
+`).all().map(r => ({
+  id: r.id,
+  date: r.date,
+  status: r.status,
+  workerId: r.workerId,
+  fullname: r.fullname,
+  doc: r.doc,
+  crewId: r.crewId         // 👈 ahora sí existe
+}));
+
 
     res.json({
       totalAsistencias,
