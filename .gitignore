@@ -1,0 +1,33 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Monorepo packages (workspaces will symlink into node_modules)
+/server/node_modules/
+/web/node_modules/
+
+# Build outputs
+/web/dist/
+/web/.vite/
+dist/
+build/
+
+# Env and local config
+.env
+*.env
+/server/.env
+/web/.env
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Misc
+logs/
+*.log
+tmp/
+coverage/
