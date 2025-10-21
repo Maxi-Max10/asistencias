@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
 const db = require("./db");
+const path = require("path");
 
 const app = express();
 
@@ -19,6 +20,19 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/crews", require("./routes/crews"));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
+
+// Servir frontend (si existe build)
+try {
+  const distDir = process.env.FRONTEND_DIR || path.resolve(__dirname, "..", "web", "dist");
+  app.use(express.static(distDir));
+  app.get(/^(?!\/api\/).*/, (req, res, next) => {
+    const indexPath = path.join(distDir, "index.html");
+    res.sendFile(indexPath, (err) => (err ? next() : undefined));
+  });
+  console.log(`[WEB] Serving static from ${distDir}`);
+} catch (e) {
+  console.warn("[WEB] Static serving not configured:", e.message);
+}
 
 // Seed inicial de crews
 try {
