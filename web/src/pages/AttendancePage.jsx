@@ -165,15 +165,41 @@ export default function AttendancePage() {
       ? crewObj.map_url
       : (crewObj.lat != null && crewObj.lng != null ? `https://www.google.com/maps?q=${crewObj.lat},${crewObj.lng}` : null);
     let embedUrl = null;
+    // 1) Preciso por coordenadas guardadas
     if (crewObj.lat != null && crewObj.lng != null) {
       embedUrl = `https://www.google.com/maps?q=${crewObj.lat},${crewObj.lng}&z=15&output=embed`;
-    } else if (crewObj.map_url) {
-      const ex = extractLatLng(crewObj.map_url);
+    } else if (crewObj.map_url || clickUrl) {
+      // 2) Intentar extraer coords del link guardado (o del clickUrl)
+      const ex = extractLatLng(crewObj.map_url || clickUrl);
       if (ex) embedUrl = `https://www.google.com/maps?q=${ex.lat},${ex.lng}&z=15&output=embed`;
     }
-    const fallbackQuery = crewObj?.name ? `${crewObj.name} Argentina` : null;
-    const fallbackEmbedUrl = fallbackQuery ? `https://www.google.com/maps?q=${encodeURIComponent(fallbackQuery)}&z=13&output=embed` : null;
-    const fallbackClick = fallbackQuery ? `https://www.google.com/maps?q=${encodeURIComponent(fallbackQuery)}` : null;
+    // 3) Fallback: embeber búsqueda usando el MISMO enlace del botón si existe
+    let fallbackEmbedUrl = null;
+    let fallbackClick = null;
+    if (!embedUrl && clickUrl) {
+      // Intentar usar el parámetro q= del clickUrl para una búsqueda limpia
+      try {
+        const u = new URL(clickUrl);
+        const q = u.searchParams.get('q');
+        if (q) {
+          fallbackEmbedUrl = `https://www.google.com/maps?q=${encodeURIComponent(q)}&z=15&output=embed`;
+          fallbackClick = clickUrl;
+        }
+      } catch {}
+      // Si no hay q=, probamos extraer coords nuevamente por si vienen en la ruta (p.ej. @lat,lng)
+      if (!fallbackEmbedUrl) {
+        const ex2 = extractLatLng(clickUrl);
+        if (ex2) {
+          fallbackEmbedUrl = `https://www.google.com/maps?q=${ex2.lat},${ex2.lng}&z=15&output=embed`;
+          fallbackClick = clickUrl;
+        }
+      }
+    } else if (!embedUrl && crewObj?.name) {
+      // último recurso: búsqueda por nombre
+      const q = crewObj.name;
+      fallbackEmbedUrl = `https://www.google.com/maps?q=${encodeURIComponent(q)}&output=embed`;
+      fallbackClick = `https://www.google.com/maps?q=${encodeURIComponent(q)}`;
+    }
     return { clickUrl, embedUrl, fallbackEmbedUrl, fallbackClick };
   }, [crewObj]);
 
@@ -369,7 +395,7 @@ export default function AttendancePage() {
                 />
               </div>
             )}
-            <div className="mt-2">
+            <div className="mt-2 flex justify-center">
               <a href={crewMap.clickUrl || crewMap.fallbackClick || '#'} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">
                 Abrir en Google Maps
                 <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.293 2.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414L8.414 17H5a1 1 0 01-1-1v-3.414L12.293 2.293zM11 4.414L4 11.414V16h4.586L15 9.586 11 5.586V4.414z" clipRule="evenodd"/></svg>

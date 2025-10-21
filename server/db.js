@@ -25,12 +25,16 @@ const dbPath = path.join(DB_DIR, "fincas.db");
 const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
+console.log(`[DB] SQLite path: ${dbPath}`);
 
 // Esquema
 db.exec(`
 CREATE TABLE IF NOT EXISTS crews (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL
+  name TEXT NOT NULL,
+  lat REAL,
+  lng REAL,
+  map_url TEXT
 );
 
 CREATE TABLE IF NOT EXISTS workers (
@@ -64,5 +68,15 @@ if (hasDocIdx) db.exec(`DROP INDEX idx_workers_doc`);
 // Crea índice único por crew_id + doc
 const hasCrewDocIdx = db.prepare(`SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_workers_crew_doc'`).get();
 if (!hasCrewDocIdx) db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_workers_crew_doc ON workers(crew_id, doc)`);
+
+// Índice único en nombre de crew (sensitivo a caso); validamos case-insensitive en app
+const hasCrewNameIdx = db.prepare(`SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_crews_name'`).get();
+if (!hasCrewNameIdx) db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_crews_name ON crews(name)`);
+
+// Migraciones suaves para columns nuevas en crews
+const colInfo = (col) => db.prepare(`SELECT 1 FROM pragma_table_info('crews') WHERE name = ?`).get(col);
+if (!colInfo('lat')) db.exec(`ALTER TABLE crews ADD COLUMN lat REAL`);
+if (!colInfo('lng')) db.exec(`ALTER TABLE crews ADD COLUMN lng REAL`);
+if (!colInfo('map_url')) db.exec(`ALTER TABLE crews ADD COLUMN map_url TEXT`);
 
 module.exports = db;
