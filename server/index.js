@@ -16,6 +16,7 @@ app.use("/api/workers", require("./routes/workers"));
 app.use("/api/attendance", require("./routes/attendance"));
 const adminRoutes = require("./routes/admin");
 app.use("/api/admin", adminRoutes);
+app.use("/api/crews", require("./routes/crews"));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 

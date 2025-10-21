@@ -68,10 +68,12 @@ router.get("/dashboard", (req, res, next) => {
     // Top fincas/cuadrillas (por filas)
     const topRows = db.prepare(`
       SELECT w.crew_id AS id,
+             c.name      AS name,
              COUNT(a.id) AS filas,
              SUM(CASE WHEN a.status = 'present' THEN 1 ELSE 0 END) AS asistencias
       FROM attendance a
       JOIN workers w ON a.worker_id = w.id
+      LEFT JOIN crews c ON c.id = w.crew_id
       WHERE w.crew_id IS NOT NULL
       GROUP BY w.crew_id
       ORDER BY filas DESC
@@ -80,7 +82,7 @@ router.get("/dashboard", (req, res, next) => {
 
     const topFincas = (topRows || []).map(r => ({
       id: r.id,
-      name: `Cuadrilla ${r.id}`,
+      name: r.name || `Cuadrilla ${r.id}`,
       filas: r.filas || 0,
       asistencias: r.asistencias || 0,
     }));

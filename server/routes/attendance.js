@@ -121,6 +121,100 @@ router.get("/today", (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// Resumen por cuadrilla (hoy)
+// GET /api/attendance/summary              -> resumen de todas las cuadrillas activas
+// GET /api/attendance/summary?crewId=2     -> resumen solo de una cuadrilla
+router.get("/summary", (req, res, next) => {
+  try {
+    const crewId = req.query.crewId ? Number(req.query.crewId) : null;
+    const date = dayjs().format("YYYY-MM-DD");
+
+    if (crewId) {
+      const totalWorkersRow = db.prepare(`
+        SELECT COUNT(*) AS total
+        FROM workers
+        WHERE crew_id = ? AND active = 1
+      `).get(crewId);
+
+      const presentRow = db.prepare(`
+        SELECT COUNT(a.id) AS total
+        FROM attendance a
+        JOIN workers w ON a.worker_id = w.id
+        WHERE w.crew_id = ? AND a.date = ? AND a.status = 'present'
+      `).get(crewId, date);
+
+      const absentRow = db.prepare(`
+        SELECT COUNT(a.id) AS total
+        FROM attendance a
+        JOIN workers w ON a.worker_id = w.id
+        WHERE w.crew_id = ? AND a.date = ? AND a.status = 'absent'
+      `).get(crewId, date);
+
+      const recordedRow = db.prepare(`
+        SELECT COUNT(a.id) AS total
+        FROM attendance a
+        JOIN workers w ON a.worker_id = w.id
+        WHERE w.crew_id = ? AND a.date = ?
+      `).get(crewId, date);
+
+      const totalWorkers = totalWorkersRow?.total || 0;
+      const present = presentRow?.total || 0;
+      const absent = absentRow?.total || 0;
+      const recorded = recordedRow?.total || 0;
+      const pending = Math.max(0, totalWorkers - recorded);
+
+      return res.json({ crewId, totalWorkers, present, absent, pending, recorded });
+    }
+
+    // Todas las cuadrillas: obtenemos lista de crew_id activos
+    const crews = db.prepare(`
+      SELECT DISTINCT crew_id AS id
+      FROM workers
+      WHERE crew_id IS NOT NULL AND active = 1
+      ORDER BY 1
+    `).all();
+
+    const out = crews.map(({ id }) => {
+      const totalWorkersRow = db.prepare(`
+        SELECT COUNT(*) AS total
+        FROM workers
+        WHERE crew_id = ? AND active = 1
+      `).get(id);
+
+      const presentRow = db.prepare(`
+        SELECT COUNT(a.id) AS total
+        FROM attendance a
+        JOIN workers w ON a.worker_id = w.id
+        WHERE w.crew_id = ? AND a.date = ? AND a.status = 'present'
+      `).get(id, date);
+
+      const absentRow = db.prepare(`
+        SELECT COUNT(a.id) AS total
+        FROM attendance a
+        JOIN workers w ON a.worker_id = w.id
+        WHERE w.crew_id = ? AND a.date = ? AND a.status = 'absent'
+      `).get(id, date);
+
+      const recordedRow = db.prepare(`
+        SELECT COUNT(a.id) AS total
+        FROM attendance a
+        JOIN workers w ON a.worker_id = w.id
+        WHERE w.crew_id = ? AND a.date = ?
+      `).get(id, date);
+
+      const totalWorkers = totalWorkersRow?.total || 0;
+      const present = presentRow?.total || 0;
+      const absent = absentRow?.total || 0;
+      const recorded = recordedRow?.total || 0;
+      const pending = Math.max(0, totalWorkers - recorded);
+
+      return { crewId: id, totalWorkers, present, absent, pending, recorded };
+    });
+
+    return res.json(out);
+  } catch (e) { next(e); }
+});
+
 // Eliminar una carga de asistencia por ID
 // DELETE /api/attendance/:id
 router.delete("/:id", (req, res, next) => {

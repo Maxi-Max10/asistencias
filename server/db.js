@@ -24,6 +24,7 @@ if (!ensureWritable(DB_DIR)) {
 const dbPath = path.join(DB_DIR, "fincas.db");
 const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");
+db.pragma("foreign_keys = ON");
 
 // Esquema
 db.exec(`

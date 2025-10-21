@@ -35,7 +35,8 @@ import {
   TableHeader,
   TableRow,
 } from "../components/ui/table";
-import { Download, LogOut, Users, Check, BarChart2 } from "lucide-react";
+import { Download, LogOut, Users, Check, BarChart2, Users2 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const API = import.meta.env.VITE_API || "http://127.0.0.1:4000";
 
@@ -144,7 +145,7 @@ function Kpi({ title, value, delta, icon, gradient = "from-indigo-500 to-indigo-
   return (
     <SurfaceCard>
       <CardContent className="p-4">
-        <div className="flex items-center gap-3">
+  <div className="flex items-center gap-3">
           <div className={`rounded-xl p-2.5 text-white shadow bg-gradient-to-br ${gradient}`}>
             {icon}
           </div>
@@ -169,6 +170,22 @@ export default function AdminDashboard() {
   const [range, setRange] = useState("week");
   const [query, setQuery] = useState("");
   const [day, setDay] = useState(todayLocal());
+
+  // Cargar crews para mapear nombres en listados recientes
+  const [crews, setCrews] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCrews(){
+      try{
+        const r = await fetch(`${API}/api/crews`, { cache: "no-store" });
+        const data = await r.json();
+        if (!cancelled) setCrews(Array.isArray(data) ? data : []);
+      }catch{ if (!cancelled) setCrews([]); }
+    }
+    loadCrews();
+    return () => { cancelled = true; };
+  }, []);
+  const crewNameById = useMemo(() => Object.fromEntries(crews.map(c => [String(c.id), c.name])), [crews]);
 
   useEffect(() => {
     let mounted = true;
@@ -205,10 +222,11 @@ export default function AdminDashboard() {
     .filter((r) => {
       if (!query) return true;
       const q = query.toLowerCase();
+      const crewNm = crewNameById[String(r.crewId ?? r.crew_id ?? "")] || asFincaName(r.finca ?? r.crewName ?? r.crewId ?? r.crew_id ?? "-");
       return (
         String(r.nombre || r.fullname || r.doc || "").toLowerCase().includes(q) ||
         String(r.dni || r.doc || "").toLowerCase().includes(q) ||
-        String(asFincaName(r.finca ?? r.crewName ?? getFincaId(r))).toLowerCase().includes(q)
+        String(crewNm).toLowerCase().includes(q)
       );
     });
 
@@ -236,12 +254,16 @@ export default function AdminDashboard() {
             { name: "Cuadrilla 3", filas: 2, asistencias: 2 },
             { name: "Cuadrilla 5", filas: 1, asistencias: 1 },
           ]
-      ).map((f) => ({
-        name: asFincaName(f.name ?? f.finca ?? f.crewName ?? f.crewId ?? f.crew_id ?? "-"),
+      ).map((f) => {
+        const fallback = asFincaName(f.name ?? f.finca ?? f.crewName ?? f.crewId ?? f.crew_id ?? "-");
+        const mapped = crewNameById[String(f.crewId ?? f.crew_id ?? f.id ?? "")] || fallback;
+        return {
+          name: mapped,
         filas: Number(f.filas ?? 0),
         asistencias: Number(f.asistencias ?? 0),
-      })),
-    [topFincasRaw]
+        };
+      }),
+    [topFincasRaw, crewNameById]
   );
 
   if (loading) {
@@ -302,6 +324,16 @@ export default function AdminDashboard() {
           >
             <Download className="mr-2 h-4 w-4" /> CSV
           </Button>
+          <Link to="/admin/workers">
+            <Button className="bg-indigo-600 hover:bg-indigo-500 text-white">
+              <Users className="mr-2 h-4 w-4" /> Trabajadores
+            </Button>
+          </Link>
+          <Link to="/admin/crews">
+            <Button className="bg-emerald-600 hover:bg-emerald-500 text-white">
+              <Users2 className="mr-2 h-4 w-4" /> Fincas
+            </Button>
+          </Link>
           <Button variant="destructive" className="bg-rose-600 hover:bg-rose-500 text-white" onClick={() => logout && logout()}>
             <LogOut className="mr-2 h-4 w-4" /> Cerrar sesión
           </Button>
@@ -608,7 +640,7 @@ export default function AdminDashboard() {
                       const s = String(raw).slice(0, 10);
                       const iso = /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : toISODate(raw);
                       const fechaText = iso ? iso.split("-").reverse().join("/") : "-";
-                      const fincaText = asFincaName(r.finca ?? r.crewName ?? r.crewId ?? r.crew_id ?? "-");
+                      const fincaText = crewNameById[String(r.crewId ?? r.crew_id ?? "")] || asFincaName(r.finca ?? r.crewName ?? r.crewId ?? r.crew_id ?? "-");
 
                       return (
                         <TableRow key={r.id ?? i} className="hover:bg-white/5">
@@ -616,7 +648,7 @@ export default function AdminDashboard() {
                             {r.nombre ?? r.fullname ?? r.doc ?? "-"}
                           </TableCell>
                           <TableCell className="font-mono text-slate-200">{r.dni ?? r.doc ?? "-"}</TableCell>
-                          <TableCell className="truncate text-slate-200">{asFincaName(r.crewId)}</TableCell>
+                          <TableCell className="truncate text-slate-200">{fincaText}</TableCell>
                           <TableCell className="text-slate-200">{fechaText}</TableCell>
                           <TableCell className="text-right text-slate-200">{getAsistencias(r)}</TableCell>
                           <TableCell className="text-right text-slate-200">{r.filas ?? 0}</TableCell>
