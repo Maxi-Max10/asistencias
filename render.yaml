@@ -1,0 +1,24 @@
+services:
+  # Backend API
+  - type: web
+    name: asistencia-api
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+    healthCheckPath: /
+
+  # Frontend (opcional, si quieres deployar el frontend también)
+  # - type: web
+  #   name: asistencia-web
+  #   env: static
+  #   region: oregon
+  #   plan: free
+  #   buildCommand: cd web && npm install && npm run build
+  #   staticPublishPath: ./web/dist
