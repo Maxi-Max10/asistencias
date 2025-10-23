@@ -9,7 +9,7 @@
     "seed": "node seed.js"
   },
   "dependencies": {
-    "better-sqlite3": "^9.6.0",
+    "better-sqlite3": "^11.0.0",
     "cors": "^2.8.5",
     "dayjs": "^1.11.13",
     "express": "^4.19.2",
@@ -19,6 +19,6 @@
     "nodemon": "^3.0.0"
   },
   "engines": {
-    "node": "20.x"
+    "node": ">=20.x"
   }
 }
