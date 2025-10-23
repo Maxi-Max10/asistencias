@@ -68,7 +68,7 @@ const tx = db.transaction(() => {
     ],
   ];
 
-  const insWorker = db.prepare("INSERT INTO workers (crew_id, fullname, doc, active) VALUES (?,?,?,1)");
+  const insWorker = db.prepare("INSERT INTO workers (crew_id, fullname, doc, active, created_at) VALUES (?,?,?,1, CURRENT_TIMESTAMP)");
   const workerIdsPerCrew = [];
 
   for (let i = 0; i < crewIds.length; i++) {

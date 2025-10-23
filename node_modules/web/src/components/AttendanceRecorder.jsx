@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-const API = import.meta.env.VITE_API || "http://127.0.0.1:4000";
+// API base: dev -> localhost:4000, prod -> mismo origen
+const API = (import.meta.env.VITE_API ?? (import.meta.env.DEV ? "http://127.0.0.1:4000" : ""));
 
 /* ========= Speech ========= */
 function useSpeech(onText){

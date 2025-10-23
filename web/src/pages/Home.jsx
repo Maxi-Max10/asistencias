@@ -2,7 +2,8 @@ import Login from "../components/Login.jsx";
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-const API = import.meta.env.VITE_API || "http://127.0.0.1:4000";
+// API base: en desarrollo usa 127.0.0.1:4000; en producción usa mismo origen por defecto
+const API = (import.meta.env.VITE_API ?? (import.meta.env.DEV ? "http://127.0.0.1:4000" : ""));
 
 // Las fincas (crews) ahora vienen de la base de datos vía API
 
@@ -114,13 +115,18 @@ export default function Home() {
         <img src="/banner.jpg" alt="" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0 bg-black/60" />
   <div className="relative max-w-6xl mx-auto px-4 h-48 sm:h-64 flex items-center justify-center text-center">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white">{greeting}! Seleccione finca</h1>
+    <h1 className="uppercase text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white">{greeting}!</h1>
         </div>
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
 
-        {/* Search + refresh */}
+        {/* Título */}
+        <div className="mb-4">
+          <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 tracking-wide">SELECCIONE FINCA</h2>
+        </div>
+
+        {/* Búsqueda + actualizar */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
           <div className="flex-1">
             <input

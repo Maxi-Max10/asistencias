@@ -8,7 +8,8 @@ import { Input } from "../components/ui/input";
 import Modal from "../components/ui/modal";
 import { useToast } from "../components/ui/toast";
 
-const API = import.meta.env.VITE_API || "http://127.0.0.1:4000";
+// API base: dev -> localhost:4000, prod -> mismo origen
+const API = (import.meta.env.VITE_API ?? (import.meta.env.DEV ? "http://127.0.0.1:4000" : ""));
 
 function AdminCrews(){
   const { role } = useAuth();

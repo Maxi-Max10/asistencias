@@ -9,6 +9,21 @@ const isValidName = (s = "") => /^[a-zA-ZÁÉÍÓÚÜÑáéíóúüñ ]{2,60}$/.
 // GET /api/workers?crewId=1
 router.get("/", (req, res, next) => {
   try {
+    // If createdSince provided, return new workers since timestamp (UTC ISO)
+    const createdSince = req.query.createdSince || req.query.newSince || null;
+    if (createdSince) {
+      const ts = String(createdSince);
+      const rows = db.prepare(`
+        SELECT w.id, w.fullname, IFNULL(w.doc,'') AS doc, w.crew_id, w.created_at,
+               c.name AS crew_name
+        FROM workers w
+        LEFT JOIN crews c ON c.id = w.crew_id
+        WHERE w.active = 1 AND w.created_at >= ?
+        ORDER BY w.created_at DESC
+      `).all(ts);
+      return res.json(rows);
+    }
+
     const crewId = Number(req.query.crewId || 1);
     const rows = db.prepare(`
       SELECT id, fullname, IFNULL(doc,'') AS doc
@@ -47,7 +62,7 @@ router.post("/", (req, res, next) => {
     }
 
     const name = (fullname && String(fullname).trim()) || ndoc;
-    const info = db.prepare("INSERT INTO workers (crew_id, fullname, doc) VALUES (?,?,?)")
+    const info = db.prepare("INSERT INTO workers (crew_id, fullname, doc, created_at) VALUES (?,?,?, CURRENT_TIMESTAMP)")
       .run(crew, name, ndoc);
 
     res.json({ id: info.lastInsertRowid, fullname: name, doc: ndoc, crew_id: crew, active: 1 });

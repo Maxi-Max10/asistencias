@@ -1,9 +1,12 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import Login from "./components/Login";
+import TopNav from "./components/TopNav";
 import Home from "./pages/Home";
 import AttendancePage from "./pages/AttendancePage";
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminWorkers from "./pages/AdminWorkers";
+import AdminCrews from "./pages/AdminCrews";
 import { useAuth } from "./contexts/AuthContext";
 
 export default function App() {
@@ -13,7 +16,9 @@ export default function App() {
   if (!role) return <Login />;
 
   return (
-    <Routes>
+    <>
+      <TopNav />
+      <Routes>
       <Route path="/" element={role === "admin" ? <AdminDashboard /> : <Home />} />
 
       <Route
@@ -28,7 +33,20 @@ export default function App() {
       />
 
       <Route path="*" element={<Navigate to="/" replace />} />
+      {role === "admin" && (
+        <Route
+          path="/admin/workers"
+          element={<AdminWorkers />}
+        />
+      )}
+      {role === "admin" && (
+        <Route
+          path="/admin/crews"
+          element={<AdminCrews />}
+        />
+      )}
     </Routes>
+    </>
   );
 }
 

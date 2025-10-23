@@ -35,10 +35,11 @@ import {
   TableHeader,
   TableRow,
 } from "../components/ui/table";
-import { Download, LogOut, Users, Check, BarChart2, Users2 } from "lucide-react";
+import { Download, LogOut, Users, Check, BarChart2, Users2, Bell } from "lucide-react";
 import { Link } from "react-router-dom";
 
-const API = import.meta.env.VITE_API || "http://127.0.0.1:4000";
+// API base: dev -> localhost:4000, prod -> mismo origen
+const API = (import.meta.env.VITE_API ?? (import.meta.env.DEV ? "http://127.0.0.1:4000" : ""));
 
 /* ========================== Helpers ========================== */
 function todayLocal() {
@@ -170,6 +171,8 @@ export default function AdminDashboard() {
   const [range, setRange] = useState("week");
   const [query, setQuery] = useState("");
   const [day, setDay] = useState(todayLocal());
+  const [showNotif, setShowNotif] = useState(false);
+  const [newWorkers, setNewWorkers] = useState([]);
 
   // Cargar crews para mapear nombres en listados recientes
   const [crews, setCrews] = useState([]);
@@ -205,6 +208,37 @@ export default function AdminDashboard() {
     load();
     return () => { mounted = false; };
   }, [range]);
+
+  // ===== Notificaciones: nuevos trabajadores
+  useEffect(() => {
+    // Initialize last seen on first visit to avoid historical flood
+    const key = "admin.newWorkers.lastSeen";
+    if (!localStorage.getItem(key)) {
+      localStorage.setItem(key, new Date().toISOString());
+    }
+    let cancelled = false;
+    async function checkOnce() {
+      try {
+        const since = localStorage.getItem(key) || new Date().toISOString();
+        const r = await fetch(`${API}/api/workers?createdSince=${encodeURIComponent(since)}`, { cache: "no-store" });
+        const data = await r.json();
+        if (!cancelled) setNewWorkers(Array.isArray(data) ? data : []);
+      } catch (e) {
+        if (!cancelled) setNewWorkers([]);
+      }
+    }
+    checkOnce();
+    const id = setInterval(checkOnce, 15000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  const unreadCount = newWorkers.length;
+  function markAllSeen() {
+    localStorage.setItem("admin.newWorkers.lastSeen", new Date().toISOString());
+    setNewWorkers([]);
+    setShowNotif(false);
+  }
+
 
   const weekly = stats?.weekly || { labels: [], filas: [], asistencias: [], meta: [] };
   const topFincasRaw = stats?.topFincas || [];          // <-- UNA sola vez
@@ -297,6 +331,44 @@ export default function AdminDashboard() {
           <p className="text-sm text-slate-400 mt-1">Métricas, fincas top y registros recientes</p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Bell notifications */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowNotif((v) => !v)}
+              className={`relative h-9 w-9 rounded-md border bg-[#2A3040] hover:bg-[#343B4E] flex items-center justify-center 
+                ${unreadCount > 0 ? 'border-amber-400/50 ring-2 ring-amber-400/40' : 'border-white/10'}
+              `}
+              title="Notificaciones de nuevos trabajadores"
+            >
+              <Bell className={`h-4 w-4 ${unreadCount > 0 ? 'text-amber-300' : 'text-amber-300'}`} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center border border-white/20">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+            {showNotif && (
+              <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-30 w-[min(90vw,20rem)] sm:w-80 rounded-lg border border-white/10 bg-[#242A38] shadow-lg shadow-black/30">
+                <div className="p-3 border-b border-white/10 flex items-center justify-between">
+                  <div className="font-semibold text-slate-100 text-sm">Nuevos trabajadores</div>
+                  <button onClick={markAllSeen} className="text-xs text-indigo-300 hover:text-indigo-200">Marcar todo visto</button>
+                </div>
+                <div className="max-h-72 overflow-y-auto">
+                  {unreadCount === 0 ? (
+                    <div className="p-3 text-xs text-slate-400">No hay novedades.</div>
+                  ) : (
+                    newWorkers.map((w) => (
+                      <div key={w.id} className="px-3 py-2 text-sm text-slate-200 border-b border-white/5">
+                        <div className="font-medium">{w.fullname || w.doc}</div>
+                        <div className="text-[11px] text-slate-400">DNI: {w.doc || '-'} • Finca: {w.crew_name || w.crew_id}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           <ToggleGroup
             type="single"
             value={range}
@@ -334,9 +406,8 @@ export default function AdminDashboard() {
               <Users2 className="mr-2 h-4 w-4" /> Fincas
             </Button>
           </Link>
-          <Button variant="destructive" className="bg-rose-600 hover:bg-rose-500 text-white" onClick={() => logout && logout()}>
-            <LogOut className="mr-2 h-4 w-4" /> Cerrar sesión
-          </Button>
+
+          {/* Cerrar sesión ahora vive en la TopNav solo para Admin */}
         </div>
       </div>
 

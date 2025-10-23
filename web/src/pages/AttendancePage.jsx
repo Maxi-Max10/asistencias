@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-const API = import.meta.env.VITE_API || "http://127.0.0.1:4000";
+import Modal from "../components/ui/modal";
+// API base: dev -> localhost:4000, prod -> mismo origen
+const API = (import.meta.env.VITE_API ?? (import.meta.env.DEV ? "http://127.0.0.1:4000" : ""));
 
 /* ======== Speech ======== */
 function useSpeech(onText){
@@ -59,7 +61,7 @@ function extractPairsLatam(phrase){
     else mode = "numeric";
   };
 
-  const pushDoc = (buf, status, out) => {
+  const pushDoc = (buf, status, out, nameTokens=[]) => {
     if (!buf) return;
     let id = buf.toUpperCase();
     if (isDigits(id)) {
@@ -70,10 +72,17 @@ function extractPairsLatam(phrase){
       if (id.length < 6) return;
       if (id.length > 18) id = id.slice(0, 18);
     }
-    out.push({ doc: id, status });
+    // Name heuristics: accept alphabetic tokens not in stopwords, max 4 tokens
+    const NAME_SKIP = new Set([...KW, "es","esta","está","se","llama","el","la","de","del","al","un","una","y"]);
+    const onlyAlpha = nameTokens
+      .map(t => t)
+      .filter(t => /^[a-záéíóúñü]+$/i.test(t) && !NAME_SKIP.has(norm(t)));
+    const capped = onlyAlpha.slice(0, 4);
+    const fullname = capped.length >= 2 ? capped.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ") : undefined;
+    out.push({ doc: id, status, ...(fullname ? { fullname } : {}) });
   };
 
-  let buf = "", pairs = [];
+  let buf = "", pairs = [], collectedNames = [];
   for (let i=0;i<tokens.length;i++){
     const raw = tokens[i];
     const t = norm(raw);
@@ -81,7 +90,7 @@ function extractPairsLatam(phrase){
     if (KW.has(t)) { buf=""; setModeByKw(t); continue; }
 
     const st = statusFromTokens(tokens, i);
-    if (st) { if (buf) pushDoc(buf, st.status, pairs); buf=""; continue; }
+    if (st) { if (buf) pushDoc(buf, st.status, pairs, collectedNames); buf=""; collectedNames = []; continue; }
 
     if (SKIP.has(t)) continue;
 
@@ -98,12 +107,15 @@ function extractPairsLatam(phrase){
       buf += chunk.toUpperCase();
     }
 
+    // Collect probable name tokens between doc and status
+    if (/^[a-záéíóúñü]+$/i.test(raw)) collectedNames.push(raw);
+
     if (buf.length > 24) buf = buf.slice(-18);
   }
 
   const map = new Map();
-  for (const p of pairs) map.set(p.doc, p.status);
-  return Array.from(map, ([doc,status]) => ({ doc, status }));
+  for (const p of pairs) map.set(p.doc, p);
+  return Array.from(map, ([doc,obj]) => ({ doc, status: obj.status, fullname: obj.fullname }));
 }
 
 // Nota: Eliminamos datos de ejemplo. Toda la vista usa datos de la base vía API.
@@ -127,7 +139,11 @@ export default function AttendancePage() {
   const [workers, setWorkers] = useState([]);
   const [workersLoading, setWorkersLoading] = useState(false);
   const [markingAbsent, setMarkingAbsent] = useState({});
+  const [markingPresent, setMarkingPresent] = useState({});
   const { start, stop, active } = useSpeech(setLastHeard);
+  const [confirmAbsent, setConfirmAbsent] = useState({ open: false, doc: null, name: null });
+  const [confirmPresent, setConfirmPresent] = useState({ open: false, doc: null, name: null });
+  const [confirming, setConfirming] = useState(false);
 
   // Traer crews para mostrar el nombre real de la finca
   const [crews, setCrews] = useState([]);
@@ -248,7 +264,7 @@ export default function AttendancePage() {
 
   async function flushQueue(){
     if (sendingRef.current) return;
-    const items = Array.from(queueRef.current, ([d, s]) => ({ doc: d, status: s }));
+    const items = Array.from(queueRef.current, ([d, o]) => ({ doc: d, status: o.status, ...(o.fullname ? { fullname: o.fullname } : {}) }));
     if (!items.length) return;
     sendingRef.current = true;
     try{
@@ -265,7 +281,10 @@ export default function AttendancePage() {
   }
 
   function enqueueItems(items){
-    for (const it of items) queueRef.current.set(it.doc, it.status);
+    for (const it of items) {
+      const prev = queueRef.current.get(it.doc) || {};
+      queueRef.current.set(it.doc, { status: it.status, fullname: it.fullname || prev.fullname });
+    }
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(flushQueue, 250);
   }
@@ -274,8 +293,20 @@ export default function AttendancePage() {
     if (!lastHeard) return;
     const phrase = lastHeard.toLowerCase();
 
-    const items = extractPairsLatam(phrase);
+    let items = extractPairsLatam(phrase);
     if (items.length){
+      // If only one item, try to derive a fullname from the phrase heuristically
+      if (items.length === 1 && !items[0].fullname) {
+        const tokens = phrase.split(/\s+/).filter(Boolean);
+        const NAME_SKIP = new Set(["presente","ausente","falta","falto","faltó","gracias","ok","listo","bien","cargando","por","favor","marcar","poner","registrar","dni","documento","documento:","cedula","cédula","ci","identidad","run","rut","cpf","curp","rfc","rg","y","de","del","el","la","un","una"]);
+        const nameTokens = tokens
+          .filter(t => /^[a-zA-ZáéíóúñüÁÉÍÓÚÑÜ]+$/.test(t) && !NAME_SKIP.has(norm(t)))
+          .slice(0, 4);
+        if (nameTokens.length >= 2) {
+          const fullname = nameTokens.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+          items[0].fullname = fullname;
+        }
+      }
       enqueueItems(items);
       const last = items[items.length - 1];
       setDoc(last.doc); setStatus(last.status);
@@ -330,6 +361,43 @@ export default function AttendancePage() {
     finally{
       setMarkingAbsent(prev => { const n={...prev}; delete n[d]; return n; });
     }
+  }
+
+  async function confirmMarkAbsent(){
+    const d = confirmAbsent.doc;
+    if (!d) { setConfirmAbsent({ open:false, doc:null, name:null }); return; }
+    try{
+      setConfirming(true);
+      await markAbsent(d);
+      setConfirmAbsent({ open:false, doc:null, name:null });
+    } finally { setConfirming(false); }
+  }
+
+  async function markPresent(docStr){
+    const d = String(docStr || "").trim();
+    if (!d) return;
+    try{
+      setMarkingPresent(prev => ({ ...prev, [d]: true }));
+      await fetch(`${API}/api/attendance`, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ crewId, doc: d, status: "present" })
+      });
+      await fetchToday();
+    }catch(e){ console.error(e); }
+    finally{
+      setMarkingPresent(prev => { const n={...prev}; delete n[d]; return n; });
+    }
+  }
+
+  async function confirmMarkPresent(){
+    const d = confirmPresent.doc;
+    if (!d) { setConfirmPresent({ open:false, doc:null, name:null }); return; }
+    try{
+      setConfirming(true);
+      await markPresent(d);
+      setConfirmPresent({ open:false, doc:null, name:null });
+    } finally { setConfirming(false); }
   }
 
   const combinedList = useMemo(()=>{
@@ -474,7 +542,7 @@ export default function AttendancePage() {
                       {!item.hasRecord ? (
                         <>
                           <span className="text-xs inline-flex items-center px-2.5 py-1 rounded-full border bg-green-50 text-green-700 border-green-200">Presente</span>
-                          <button onClick={() => markAbsent(item.doc)} disabled={!!markingAbsent[item.doc]} className="text-xs inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                          <button onClick={() => setConfirmAbsent({ open: true, doc: item.doc, name: item.fullname || item.doc })} disabled={!!markingAbsent[item.doc]} className="text-xs inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                             {markingAbsent[item.doc] ? (
                               <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="2" opacity=".25"/><path d="M22 12a10 10 0 00-10-10" strokeWidth="2"/></svg>
                             ) : (
@@ -484,9 +552,33 @@ export default function AttendancePage() {
                           </button>
                         </>
                       ) : (
-                        <span className={`text-xs inline-flex items-center px-2.5 py-1 rounded-full border ${item.status==='present' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
-                          {item.status==='present' ? 'Presente' : 'Ausente'}
-                        </span>
+                        item.status === 'present' ? (
+                          <>
+                            <span className="text-xs inline-flex items-center px-2.5 py-1 rounded-full border bg-green-50 text-green-700 border-green-200">Presente</span>
+                            <button onClick={() => setConfirmAbsent({ open: true, doc: item.doc, name: item.fullname || item.doc })} disabled={!!markingAbsent[item.doc]} className="text-xs inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                              {markingAbsent[item.doc] ? (
+                                <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="2" opacity=".25"/><path d="M22 12a10 10 0 00-10-10" strokeWidth="2"/></svg>
+                              ) : (
+                                <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-10.293a1 1 0 00-1.414-1.414L10 8.586 7.707 6.293a1 1 0 10-1.414 1.414L8.586 10l-2.293 2.293a1 1 0 001.414-1.414L11.414 10l2.293-2.293z" clipRule="evenodd"/></svg>
+                              )}
+                              Cambiar a ausente
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className={`text-xs inline-flex items-center px-2.5 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200`}>
+                              Ausente
+                            </span>
+                            <button onClick={() => setConfirmPresent({ open: true, doc: item.doc, name: item.fullname || item.doc })} disabled={!!markingPresent[item.doc]} className="text-xs inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                              {markingPresent[item.doc] ? (
+                                <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="2" opacity=".25"/><path d="M22 12a10 10 0 00-10-10" strokeWidth="2"/></svg>
+                              ) : (
+                                <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"/></svg>
+                              )}
+                              Cambiar a presente
+                            </button>
+                          </>
+                        )
                       )}
                     </div>
                   </div>
@@ -496,6 +588,35 @@ export default function AttendancePage() {
           </div>
         </div>
       </div>
+      <AbsentConfirmModal open={confirmAbsent.open} name={confirmAbsent.name} onCancel={()=> setConfirmAbsent({ open:false, doc:null, name:null })} onConfirm={confirmMarkAbsent} loading={confirming} />
+      <PresentConfirmModal open={confirmPresent.open} name={confirmPresent.name} onCancel={()=> setConfirmPresent({ open:false, doc:null, name:null })} onConfirm={confirmMarkPresent} loading={confirming} />
     </div>
+  );
+}
+
+// Confirm modal
+function AbsentConfirmModal({ open, name, onCancel, onConfirm, loading }){
+  return (
+    <Modal open={open} onClose={onCancel} title="Confirmar ausencia" footer={(
+      <>
+        <button onClick={onCancel} className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancelar</button>
+        <button onClick={onConfirm} disabled={loading} className="px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white">{loading ? 'Marcando...' : 'Confirmar ausente'}</button>
+      </>
+    )}>
+      <p className="text-slate-300">¿Confirmás marcar como <span className="font-semibold">ausente</span> a {name || 'este trabajador'}?</p>
+    </Modal>
+  );
+}
+
+function PresentConfirmModal({ open, name, onCancel, onConfirm, loading }){
+  return (
+    <Modal open={open} onClose={onCancel} title="Confirmar presente" footer={(
+      <>
+        <button onClick={onCancel} className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancelar</button>
+        <button onClick={onConfirm} disabled={loading} className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white">{loading ? 'Marcando...' : 'Confirmar presente'}</button>
+      </>
+    )}>
+      <p className="text-slate-300">¿Confirmás marcar como <span className="font-semibold">presente</span> a {name || 'este trabajador'}?</p>
+    </Modal>
   );
 }
