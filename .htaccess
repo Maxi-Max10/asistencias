@@ -1,0 +1,12 @@
+# Este archivo NO es necesario si la App Node.js está correctamente configurada
+# Solo se usa si servís el sitio como estático (no recomendado)
+
+# Si usás Apache estático (backup), estas reglas redirigen todo al index.html
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>
