@@ -158,12 +158,16 @@ router.get("/summary", (req, res, next) => {
       `).get(crewId, date);
 
       const totalWorkers = totalWorkersRow?.total || 0;
-      const present = presentRow?.total || 0;
+      const presentRecorded = presentRow?.total || 0;
       const absent = absentRow?.total || 0;
       const recorded = recordedRow?.total || 0;
       const pending = Math.max(0, totalWorkers - recorded);
 
-      return res.json({ crewId, totalWorkers, present, absent, pending, recorded });
+      // Default policy: no marcado = presente por defecto en tarjetas
+      const present = presentRecorded + pending;
+      const pendingShown = 0; // se muestran como presentes por defecto
+
+      return res.json({ crewId, totalWorkers, present, absent, pending: pendingShown, recorded });
     }
 
     // Todas las cuadrillas: obtenemos lista de crew_id activos
@@ -203,12 +207,16 @@ router.get("/summary", (req, res, next) => {
       `).get(id, date);
 
       const totalWorkers = totalWorkersRow?.total || 0;
-      const present = presentRow?.total || 0;
+      const presentRecorded = presentRow?.total || 0;
       const absent = absentRow?.total || 0;
       const recorded = recordedRow?.total || 0;
       const pending = Math.max(0, totalWorkers - recorded);
 
-      return { crewId: id, totalWorkers, present, absent, pending, recorded };
+      // Default policy: no marcado = presente por defecto en tarjetas
+      const present = presentRecorded + pending;
+      const pendingShown = 0;
+
+      return { crewId: id, totalWorkers, present, absent, pending: pendingShown, recorded };
     });
 
     return res.json(out);
