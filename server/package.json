@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "nodemon index.js",
     "start": "node index.js",
-    "seed": "node seed.js"
+    "seed": "node seed.js",
+    "purge:workers": "node scripts/purge-workers.js",
+    "purge:crews": "node scripts/purge-crews.js"
   },
   "dependencies": {
     "better-sqlite3": "^9.6.0",

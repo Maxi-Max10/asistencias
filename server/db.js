@@ -56,6 +56,16 @@ CREATE TABLE IF NOT EXISTS attendance (
   UNIQUE(worker_id, date),
   FOREIGN KEY (worker_id) REFERENCES workers(id)
 );
+
+CREATE TABLE IF NOT EXISTS crew_activities (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  crew_id INTEGER NOT NULL,
+  date TEXT NOT NULL,
+  description TEXT NOT NULL,
+  order_index INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  FOREIGN KEY (crew_id) REFERENCES crews(id) ON DELETE CASCADE
+);
 `);
 
 // Migraciones suaves
@@ -81,6 +91,9 @@ if (!hasCrewDocIdx) db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_workers_crew_
 const hasWorkersCreatedIdx = db.prepare(`SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_workers_created_at'`).get();
 if (!hasWorkersCreatedIdx) db.exec(`CREATE INDEX IF NOT EXISTS idx_workers_created_at ON workers(created_at)`);
 
+// Saneamiento defensivo: si por alguna ruta de inserción quedó created_at en NULL, lo rellenamos
+try { db.exec(`UPDATE workers SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL`); } catch {}
+
 // Índice único en nombre de crew (sensitivo a caso); validamos case-insensitive en app
 const hasCrewNameIdx = db.prepare(`SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_crews_name'`).get();
 if (!hasCrewNameIdx) db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_crews_name ON crews(name)`);
@@ -90,5 +103,9 @@ const colInfo = (col) => db.prepare(`SELECT 1 FROM pragma_table_info('crews') WH
 if (!colInfo('lat')) db.exec(`ALTER TABLE crews ADD COLUMN lat REAL`);
 if (!colInfo('lng')) db.exec(`ALTER TABLE crews ADD COLUMN lng REAL`);
 if (!colInfo('map_url')) db.exec(`ALTER TABLE crews ADD COLUMN map_url TEXT`);
+
+// Índices activities
+const hasCrewActivitiesIdx = db.prepare(`SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_crew_activities_crew_date'`).get();
+if (!hasCrewActivitiesIdx) db.exec(`CREATE INDEX IF NOT EXISTS idx_crew_activities_crew_date ON crew_activities(crew_id, date, order_index)`);
 
 module.exports = db;

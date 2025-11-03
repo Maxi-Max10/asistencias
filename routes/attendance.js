@@ -157,17 +157,16 @@ router.get("/summary", (req, res, next) => {
         WHERE w.crew_id = ? AND a.date = ?
       `).get(crewId, date);
 
-      const totalWorkers = totalWorkersRow?.total || 0;
-      const presentRecorded = presentRow?.total || 0;
-      const absent = absentRow?.total || 0;
-      const recorded = recordedRow?.total || 0;
-      const pending = Math.max(0, totalWorkers - recorded);
+  const totalWorkers = totalWorkersRow?.total || 0;
+  const presentRecorded = presentRow?.total || 0;
+  const absent = absentRow?.total || 0;
+  const recorded = recordedRow?.total || 0;
+  const unrecorded = Math.max(0, totalWorkers - recorded);
+  // Política: los no registrados cuentan como PRESENTES por defecto
+  const present = presentRecorded + unrecorded;
+  const pending = 0; // no se muestran pendientes con esta política
 
-      // Default policy: no marcado = presente por defecto en tarjetas
-      const present = presentRecorded + pending;
-      const pendingShown = 0; // se muestran como presentes por defecto
-
-      return res.json({ crewId, totalWorkers, present, absent, pending: pendingShown, recorded });
+  return res.json({ crewId, totalWorkers, present, absent, pending, recorded });
     }
 
     // Todas las cuadrillas: obtenemos lista de crew_id activos
@@ -206,17 +205,15 @@ router.get("/summary", (req, res, next) => {
         WHERE w.crew_id = ? AND a.date = ?
       `).get(id, date);
 
-      const totalWorkers = totalWorkersRow?.total || 0;
-      const presentRecorded = presentRow?.total || 0;
-      const absent = absentRow?.total || 0;
-      const recorded = recordedRow?.total || 0;
-      const pending = Math.max(0, totalWorkers - recorded);
+  const totalWorkers = totalWorkersRow?.total || 0;
+  const presentRecorded = presentRow?.total || 0;
+  const absent = absentRow?.total || 0;
+  const recorded = recordedRow?.total || 0;
+  const unrecorded = Math.max(0, totalWorkers - recorded);
+  const present = presentRecorded + unrecorded;
+  const pending = 0;
 
-      // Default policy: no marcado = presente por defecto en tarjetas
-      const present = presentRecorded + pending;
-      const pendingShown = 0;
-
-      return { crewId: id, totalWorkers, present, absent, pending: pendingShown, recorded };
+  return { crewId: id, totalWorkers, present, absent, pending, recorded };
     });
 
     return res.json(out);

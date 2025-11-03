@@ -15,8 +15,9 @@ function upsertWorkerByDoc({ crewId, doc, fullname = null }) {
   if (w) return w;
 
   const name = fullname && fullname.trim() ? fullname.trim() : doc;
+  // Asegurar created_at para notificaciones de nuevos trabajadores
   const info = db
-    .prepare(`INSERT INTO workers (crew_id, fullname, active, doc) VALUES (?, ?, 1, ?)`)
+    .prepare(`INSERT INTO workers (crew_id, fullname, active, doc, created_at) VALUES (?, ?, 1, ?, CURRENT_TIMESTAMP)`) 
     .run(crewId, name, doc);
 
   return db.prepare(`SELECT * FROM workers WHERE id = ?`).get(info.lastInsertRowid);

@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import Modal from "../components/ui/modal";
+import dayjs from "dayjs";
 // API base: dev -> localhost:4000, prod -> mismo origen
 const API = (import.meta.env.VITE_API ?? (import.meta.env.DEV ? "http://127.0.0.1:4000" : ""));
 
@@ -125,6 +126,7 @@ export default function AttendancePage() {
   const navigate = useNavigate();
   const params = useParams();
   const crewId = useMemo(() => Number(params.id || 1), [params.id]);
+  const todayDate = useMemo(() => dayjs().format("YYYY-MM-DD"), []);
 
   useEffect(() => {
     if (!role) navigate("/", { replace: true });
@@ -144,6 +146,21 @@ export default function AttendancePage() {
   const [confirmAbsent, setConfirmAbsent] = useState({ open: false, doc: null, name: null });
   const [confirmPresent, setConfirmPresent] = useState({ open: false, doc: null, name: null });
   const [confirming, setConfirming] = useState(false);
+  const [activities, setActivities] = useState([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+
+  const loadActivities = useCallback(async () => {
+    try {
+      setActivitiesLoading(true);
+      const r = await fetch(`${API}/api/crews/${crewId}/activities?date=${encodeURIComponent(todayDate)}&_=${Date.now()}`, { cache: "no-store" });
+      const data = await r.json();
+      setActivities(Array.isArray(data) ? data : []);
+    } catch {
+      setActivities([]);
+    } finally {
+      setActivitiesLoading(false);
+    }
+  }, [crewId, todayDate]);
 
   // Traer crews para mostrar el nombre real de la finca
   const [crews, setCrews] = useState([]);
@@ -230,6 +247,7 @@ export default function AttendancePage() {
     setDoc("");
     setStatus("present");
     fetchToday();
+    loadActivities();
   }, [crewId]);
 
   useEffect(()=>{
@@ -415,7 +433,7 @@ export default function AttendancePage() {
       return {
         doc: key,
         fullname: w.fullname || r?.fullname,
-        status: hasRecord ? r.status : "present",
+        status: hasRecord ? r.status : "pending",
         source: "worker",
         rowId: r?.id,
         hasRecord
@@ -427,7 +445,7 @@ export default function AttendancePage() {
     return [...fromWorkers, ...extras];
   }, [rows, workers]);
 
-  useEffect(()=>{ fetchToday(); }, []);
+  useEffect(()=>{ fetchToday(); loadActivities(); }, []);
 
   return (
     <div className="min-h-screen bg-white antialiased">
@@ -471,6 +489,33 @@ export default function AttendancePage() {
             </div>
           </div>
         )}
+
+        {/* Actividades del día */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-semibold text-gray-900">Actividades del día</h2>
+            <button onClick={loadActivities} className="inline-flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">
+              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a1 1 0 011-1h2a1 1 0 110 2H6.414l1.293 1.293a7 7 0 11-2 2L4 7.414V9a1 1 0 11-2 0V5a1 1 0 011-1zm10 8a5 5 0 10-4.546 4.978L9 16l3 3-3 3-.454-1.022A7 7 0 1116 12z" clipRule="evenodd"/></svg>
+              Actualizar
+            </button>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white">
+            {activitiesLoading ? (
+              <div className="p-4 text-sm text-gray-500">Cargando actividades...</div>
+            ) : activities.length === 0 ? (
+              <div className="p-4 text-sm text-gray-600">No hay actividades asignadas para hoy.</div>
+            ) : (
+              <ul className="p-4 space-y-2">
+                {activities.map((a) => (
+                  <li key={a.id} className="flex items-start gap-2">
+                    <span className="mt-1 inline-block h-2 w-2 rounded-full bg-gray-900" />
+                    <span className="text-sm text-gray-900 whitespace-pre-wrap break-words">{a.description}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
 
         <div className="bg-black text-white rounded-2xl p-4 sm:p-6 shadow-lg">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
@@ -541,7 +586,15 @@ export default function AttendancePage() {
                     <div className="flex items-center gap-2">
                       {!item.hasRecord ? (
                         <>
-                          <span className="text-xs inline-flex items-center px-2.5 py-1 rounded-full border bg-green-50 text-green-700 border-green-200">Presente</span>
+                          <span className="text-xs inline-flex items-center px-2.5 py-1 rounded-full border bg-gray-100 text-gray-700 border-gray-300">Sin marca</span>
+                          <button onClick={() => setConfirmPresent({ open: true, doc: item.doc, name: item.fullname || item.doc })} disabled={!!markingPresent[item.doc]} className="text-xs inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                            {markingPresent[item.doc] ? (
+                              <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="2" opacity=".25"/><path d="M22 12a10 10 0 00-10-10" strokeWidth="2"/></svg>
+                            ) : (
+                              <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"/></svg>
+                            )}
+                            Marcar presente
+                          </button>
                           <button onClick={() => setConfirmAbsent({ open: true, doc: item.doc, name: item.fullname || item.doc })} disabled={!!markingAbsent[item.doc]} className="text-xs inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                             {markingAbsent[item.doc] ? (
                               <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="2" opacity=".25"/><path d="M22 12a10 10 0 00-10-10" strokeWidth="2"/></svg>

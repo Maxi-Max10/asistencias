@@ -65,7 +65,7 @@ router.get("/dashboard", (req, res, next) => {
       meta.push(null); // o setear objetivo si tenés esa info
     }
 
-    // Top fincas/cuadrillas (por filas)
+  // Top fincas/cuadrillas (por filas)
     const topRows = db.prepare(`
       SELECT w.crew_id AS id,
              c.name      AS name,
@@ -87,26 +87,46 @@ router.get("/dashboard", (req, res, next) => {
       asistencias: r.asistencias || 0,
     }));
 
-// Recent records (últimos 30)
-const recent = db.prepare(`
-  SELECT
-    a.id, a.date, a.status,
-    w.id         AS workerId,
-    w.fullname, w.doc,
-    w.crew_id    AS crewId   -- 👈 usamos crewId directo
-  FROM attendance a
-  JOIN workers w ON a.worker_id = w.id
-  ORDER BY a.date DESC, a.id DESC
-  LIMIT 30
-`).all().map(r => ({
-  id: r.id,
-  date: r.date,
-  status: r.status,
-  workerId: r.workerId,
-  fullname: r.fullname,
-  doc: r.doc,
-  crewId: r.crewId         // 👈 ahora sí existe
-}));
+    // Recent diario completo (snapshot del día): incluye TODOS los trabajadores activos
+    // Política: si no hay registro de attendance, cuenta como presente (1)
+    const day = dayjs().format("YYYY-MM-DD");
+    const queryDate = req.query.date && String(req.query.date).match(/^\d{4}-\d{2}-\d{2}$/)
+      ? String(req.query.date)
+      : day;
+
+    const recent = db.prepare(`
+      SELECT
+        w.id            AS workerId,
+        w.fullname      AS fullname,
+        w.doc           AS doc,
+        w.crew_id       AS crewId,
+        a.id            AS attendanceId,
+        a.status        AS status,
+        CASE
+          WHEN a.status = 'absent'  THEN 0
+          WHEN a.status = 'present' THEN 1
+          WHEN a.id IS NULL         THEN 1
+          ELSE 0
+        END             AS asistencias,
+        ?               AS date,
+        0               AS filas
+      FROM workers w
+      LEFT JOIN attendance a
+        ON a.worker_id = w.id AND a.date = ?
+      WHERE w.active = 1 AND w.crew_id IS NOT NULL
+      ORDER BY w.fullname COLLATE NOCASE ASC
+      LIMIT 1000
+    `).all(queryDate, queryDate).map(r => ({
+      id: r.attendanceId || `w-${r.workerId}`,
+      date: queryDate,
+      status: r.status || 'present', // coherente con política por defecto
+      workerId: r.workerId,
+      fullname: r.fullname,
+      doc: r.doc,
+      crewId: r.crewId,
+      asistencias: Number(r.asistencias) || 0,
+      filas: 0,
+    }));
 
 
     res.json({

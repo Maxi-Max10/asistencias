@@ -123,4 +123,78 @@ const recent = db.prepare(`
   }
 });
 
+/**
+ * POST /api/admin/purge-workers
+ * Borra TODOS los trabajadores y sus asistencias. Mantiene las fincas y actividades.
+ * Opcional: { keepAttendance: boolean } (ignorada, siempre se eliminan porque dependen de workers)
+ * Devuelve { deletedAttendance, deletedWorkers }
+ */
+router.post("/purge-workers", (req, res, next) => {
+  try {
+    const tx = db.transaction(() => {
+      // contar antes de borrar
+      const attCountRow = db.prepare(`SELECT COUNT(*) AS c FROM attendance`).get();
+      const workersCountRow = db.prepare(`SELECT COUNT(*) AS c FROM workers`).get();
+
+      // borrar attendance (más eficiente borrar por FK implícita por worker, pero borramos todo)
+      const delAttInfo = db.prepare(`DELETE FROM attendance`).run();
+      const delWorkersInfo = db.prepare(`DELETE FROM workers`).run();
+
+      // Resetear autoincrement si existe la tabla de secuencias
+      try {
+        db.exec(`DELETE FROM sqlite_sequence WHERE name IN ('attendance','workers')`);
+      } catch {}
+
+      return {
+        deletedAttendance: delAttInfo.changes ?? attCountRow.c ?? 0,
+        deletedWorkers: delWorkersInfo.changes ?? workersCountRow.c ?? 0,
+      };
+    });
+
+    const out = tx();
+    res.json({ ok: true, ...out });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/admin/purge-crews
+ * Borra TODAS las fincas y datos asociados: attendance, workers y crew_activities.
+ * Deja todas las tablas vacías y resetea los autoincrements.
+ * Devuelve { deletedAttendance, deletedWorkers, deletedActivities, deletedCrews }
+ */
+router.post("/purge-crews", (req, res, next) => {
+  try {
+    const tx = db.transaction(() => {
+      const attCountRow = db.prepare(`SELECT COUNT(*) AS c FROM attendance`).get();
+      const workersCountRow = db.prepare(`SELECT COUNT(*) AS c FROM workers`).get();
+      const actCountRow = db.prepare(`SELECT COUNT(*) AS c FROM crew_activities`).get();
+      const crewsCountRow = db.prepare(`SELECT COUNT(*) AS c FROM crews`).get();
+
+      const delAttInfo = db.prepare(`DELETE FROM attendance`).run();
+      const delWorkersInfo = db.prepare(`DELETE FROM workers`).run();
+      // crew_activities tiene ON DELETE CASCADE, pero borramos explícitamente por claridad
+      const delActsInfo = db.prepare(`DELETE FROM crew_activities`).run();
+      const delCrewsInfo = db.prepare(`DELETE FROM crews`).run();
+
+      try {
+        db.exec(`DELETE FROM sqlite_sequence WHERE name IN ('attendance','workers','crew_activities','crews')`);
+      } catch {}
+
+      return {
+        deletedAttendance: delAttInfo.changes ?? attCountRow.c ?? 0,
+        deletedWorkers: delWorkersInfo.changes ?? workersCountRow.c ?? 0,
+        deletedActivities: delActsInfo.changes ?? actCountRow.c ?? 0,
+        deletedCrews: delCrewsInfo.changes ?? crewsCountRow.c ?? 0,
+      };
+    });
+
+    const out = tx();
+    res.json({ ok: true, ...out });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

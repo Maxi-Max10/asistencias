@@ -17,7 +17,7 @@ function AdminWorkers(){
   const { role } = useAuth();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const [crewId, setCrewId] = useState(1);
+  const [crewId, setCrewId] = useState(null);
   const [crews, setCrews] = useState([]);
   const [loading, setLoading] = useState(false);
   const [workers, setWorkers] = useState([]);
@@ -75,6 +75,7 @@ function AdminWorkers(){
   async function load(){
     try{
       setLoading(true);
+      if (!crewId) { setWorkers([]); return; }
       const r = await fetch(`${API}/api/workers?crewId=${crewId}`);
       const data = await r.json();
       setWorkers(Array.isArray(data) ? data : []);
@@ -115,6 +116,50 @@ function AdminWorkers(){
     return filtered.slice(start, start + perPage);
   }, [filtered, pageSafe, perPage]);
 
+  const renderBody = () => {
+    if (loading) {
+      return Array.from({ length: Math.min(5, perPage) }).map((_, idx) => (
+        <TableRow key={`s-${idx}`} className="animate-pulse">
+          <TableCell><div className="h-4 w-40 bg-white/10 rounded" /></TableCell>
+          <TableCell><div className="h-4 w-24 bg-white/10 rounded" /></TableCell>
+          <TableCell className="hidden sm:table-cell"><div className="h-4 w-20 bg-white/10 rounded" /></TableCell>
+          <TableCell className="text-right"><div className="ml-auto h-8 w-24 bg-white/10 rounded" /></TableCell>
+        </TableRow>
+      ));
+    }
+    if (!crewId) {
+      return (
+        <TableRow>
+          <TableCell colSpan={4} className="text-center text-slate-400 py-6">
+            No hay fincas creadas. Creá una finca desde “Administrador → Fincas” para poder cargar trabajadores.
+          </TableCell>
+        </TableRow>
+      );
+    }
+    if (!filtered.length) {
+      return (
+        <TableRow>
+          <TableCell colSpan={4} className="text-center text-slate-400 py-6">
+            {loading ? "Cargando..." : "Sin trabajadores para esta finca"}
+          </TableCell>
+        </TableRow>
+      );
+    }
+    return paged.map((w, i) => (
+      <TableRow key={w.id ?? `${w.doc}-${i}`} className={`hover:bg-white/5 ${highlightId === w.id ? "bg-emerald-900/30" : ""}`}>
+        <TableCell className="text-slate-100">{w.fullname || "-"}</TableCell>
+        <TableCell className="font-mono text-slate-200">{w.doc || "-"}</TableCell>
+        <TableCell className="text-slate-200 hidden sm:table-cell">{crewId ? ((crews.find(f=>f.id===crewId)?.name) || `Finca ${crewId}`) : '-'}</TableCell>
+        <TableCell className="text-right">
+          <div className="inline-flex gap-2">
+            <Button size="sm" className="h-8 bg-indigo-600 hover:bg-indigo-500 text-white" onClick={()=> { setEditTarget(w); setEditName(w.fullname || ""); setEditDoc(w.doc || ""); setShowEdit(true); }}>Editar</Button>
+            <Button size="sm" variant="destructive" className="h-8" onClick={()=> { setDeleteTarget(w); setShowDelete(true); }}>Eliminar</Button>
+          </div>
+        </TableCell>
+      </TableRow>
+    ));
+  };
+
   return (
     <div className="min-h-screen p-6 text-slate-200" style={{ backgroundColor: "rgb(30,34,43)" }}>
       <div className="mb-6 flex items-center justify-between gap-3">
@@ -129,14 +174,17 @@ function AdminWorkers(){
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2">
           <select
-            value={crewId}
-            onChange={(e)=> setCrewId(Number(e.target.value))}
+            value={crewId ?? ''}
+            onChange={(e)=> setCrewId(e.target.value ? Number(e.target.value) : null)}
             className="h-9 rounded-md border border-white/10 bg-[#2A3040] px-3 text-sm text-slate-200"
+            disabled={!crews.length}
           >
-            {crews.length ? crews.map(f => (
-              <option key={f.id} value={f.id}>{f.name}</option>
-            )) : (
-              <option value={crewId}>Finca {crewId}</option>
+            {crews.length ? (
+              crews.map(f => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))
+            ) : (
+              <option value="">No hay fincas — creá una primero</option>
             )}
           </select>
           <div className="flex items-center gap-2">
@@ -152,15 +200,22 @@ function AdminWorkers(){
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button onClick={load} className="bg-indigo-600 hover:bg-indigo-500 text-white">Actualizar</Button>
-            <Button onClick={()=> setShowCreate(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white">Nuevo</Button>
+            <Button onClick={load} className="bg-indigo-600 hover:bg-indigo-500 text-white" disabled={!crews.length}>Actualizar</Button>
+            <Button onClick={()=> setShowCreate(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white" disabled={!crews.length}>Nuevo</Button>
           </div>
         </div>
       </div>
 
+      {/* Aviso cuando no hay fincas creadas */}
+      {!crews.length && (
+        <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-amber-200">
+          Primero creá una finca desde <Link to="/admin/crews" className="underline">Administrador → Fincas</Link> para poder cargar trabajadores.
+        </div>
+      )}
+
       <Card className="border-white/10 bg-[#242A38] shadow-lg shadow-black/30">
         <CardHeader className="pb-2">
-          <CardTitle className="text-slate-100">{(crews.find(f=>f.id===crewId)?.name) || `Finca ${crewId}`} — Lista</CardTitle>
+          <CardTitle className="text-slate-100">{crewId ? (crews.find(f=>f.id===crewId)?.name || `Finca ${crewId}`) : "Sin finca seleccionada"} — Lista</CardTitle>
           <CardDescription className="text-slate-400">{loading ? "Cargando..." : `${filtered.length} trabajador(es)`}</CardDescription>
         </CardHeader>
         <CardContent>
@@ -194,36 +249,7 @@ function AdminWorkers(){
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {loading ? (
-                    Array.from({ length: Math.min(5, perPage) }).map((_, idx) => (
-                      <TableRow key={`s-${idx}`} className="animate-pulse">
-                        <TableCell><div className="h-4 w-40 bg-white/10 rounded" /></TableCell>
-                        <TableCell><div className="h-4 w-24 bg-white/10 rounded" /></TableCell>
-                        <TableCell className="hidden sm:table-cell"><div className="h-4 w-20 bg-white/10 rounded" /></TableCell>
-                        <TableCell className="text-right"><div className="ml-auto h-8 w-24 bg-white/10 rounded" /></TableCell>
-                      </TableRow>
-                    ))
-                  ) : !filtered.length ? (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center text-slate-400 py-6">
-                        {loading ? "Cargando..." : "Sin trabajadores para esta finca"}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paged.map((w, i) => (
-                      <TableRow key={w.id ?? `${w.doc}-${i}`} className={`hover:bg-white/5 ${highlightId === w.id ? "bg-emerald-900/30" : ""}`}>
-                        <TableCell className="text-slate-100">{w.fullname || "-"}</TableCell>
-                        <TableCell className="font-mono text-slate-200">{w.doc || "-"}</TableCell>
-                        <TableCell className="text-slate-200 hidden sm:table-cell">{(crews.find(f=>f.id===crewId)?.name) || `Finca ${crewId}`}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="inline-flex gap-2">
-                            <Button size="sm" className="h-8 bg-indigo-600 hover:bg-indigo-500 text-white" onClick={()=> { setEditTarget(w); setEditName(w.fullname || ""); setEditDoc(w.doc || ""); setShowEdit(true); }}>Editar</Button>
-                            <Button size="sm" variant="destructive" className="h-8" onClick={()=> { setDeleteTarget(w); setShowDelete(true); }}>Eliminar</Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
+                  {renderBody()}
                 </TableBody>
               </Table>
             </div>
@@ -260,7 +286,7 @@ function AdminWorkers(){
         footer={(
           <>
             <Button variant="secondary" className="border-white/10 bg-[#2A3040] text-slate-200" onClick={()=> setShowCreate(false)}>Cancelar</Button>
-            <Button disabled={creating || !newDocValid || !newNameValid} className="bg-emerald-600 hover:bg-emerald-500 text-white" onClick={async ()=>{
+            <Button disabled={creating || !newDocValid || !newNameValid || !crewId} className="bg-emerald-600 hover:bg-emerald-500 text-white" onClick={async ()=>{
               try{
                 setCreating(true);
                 const resp = await fetch(`${API}/api/workers`, {
@@ -327,7 +353,7 @@ function AdminWorkers(){
       <Modal
         open={showEdit}
         onClose={()=> setShowEdit(false)}
-        title={`Editar trabajador${editTarget?.fullname ? ` — ${editTarget.fullname}` : ""}`}
+  title={`Editar trabajador${editTarget?.fullname ? ` — ${editTarget.fullname}` : ""}`}
         footer={(
           <>
             <Button variant="secondary" className="border-white/10 bg-[#2A3040] text-slate-200" onClick={()=> setShowEdit(false)}>Cancelar</Button>

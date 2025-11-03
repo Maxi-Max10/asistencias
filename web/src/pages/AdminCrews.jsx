@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
@@ -7,14 +7,18 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import Modal from "../components/ui/modal";
 import { useToast } from "../components/ui/toast";
+import dayjs from "dayjs";
 
 // API base: dev -> localhost:4000, prod -> mismo origen
 const API = (import.meta.env.VITE_API ?? (import.meta.env.DEV ? "http://127.0.0.1:4000" : ""));
+const DATE_RE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 
 function AdminCrews(){
   const { role } = useAuth();
   const navigate = useNavigate();
   const { showToast } = useToast();
+
+  const todayStr = useMemo(() => dayjs().format("YYYY-MM-DD"), []);
 
   const [loading, setLoading] = useState(false);
   const [crews, setCrews] = useState([]);
@@ -24,6 +28,8 @@ function AdminCrews(){
   const [newName, setNewName] = useState("");
   const [newLoc, setNewLoc] = useState(""); // URL de Google Maps o "lat,lng"
   const [creating, setCreating] = useState(false);
+  const [newActivitiesDate, setNewActivitiesDate] = useState(todayStr);
+  const [newActivitiesText, setNewActivitiesText] = useState("");
 
   const [showEdit, setShowEdit] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
@@ -32,6 +38,15 @@ function AdminCrews(){
 
   const [showDelete, setShowDelete] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const [showActivities, setShowActivities] = useState(false);
+  const [activitiesTarget, setActivitiesTarget] = useState(null);
+  const [activityDate, setActivityDate] = useState(todayStr);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [activities, setActivities] = useState([]);
+  const [newActivityText, setNewActivityText] = useState("");
+  const [savingActivities, setSavingActivities] = useState(false);
+  const [removingActivities, setRemovingActivities] = useState({});
 
   useEffect(()=>{
     if (!role || role !== "admin") navigate("/", { replace: true });
@@ -47,6 +62,101 @@ function AdminCrews(){
   }
 
   useEffect(()=>{ load(); }, []);
+
+  const loadActivities = useCallback(async (crewId, date) => {
+    if (!crewId) return;
+    try {
+      setActivitiesLoading(true);
+  const r = await fetch(`${API}/api/crews/${crewId}/activities?date=${encodeURIComponent(date)}&_=${Date.now()}`, { cache: "no-store" });
+      const data = await r.json();
+      setActivities(Array.isArray(data) ? data : []);
+    } catch {
+      setActivities([]);
+    } finally {
+      setActivitiesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!showActivities || !activitiesTarget) return;
+    loadActivities(activitiesTarget.id, activityDate);
+  }, [showActivities, activitiesTarget, activityDate, loadActivities]);
+
+  const openActivitiesModal = (crew) => {
+    setActivitiesTarget(crew);
+    setActivityDate(todayStr);
+    setActivities([]);
+    setNewActivityText("");
+    setRemovingActivities({});
+    setShowActivities(true);
+  };
+
+  const closeActivitiesModal = useCallback(() => {
+    setShowActivities(false);
+    setActivitiesTarget(null);
+    setActivities([]);
+    setNewActivityText("");
+    setActivityDate(todayStr);
+    setSavingActivities(false);
+    setRemovingActivities({});
+  }, [todayStr]);
+
+  async function handleAddActivities(){
+    if (!activitiesTarget) return;
+    const lines = newActivityText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (!lines.length) {
+      showToast({ title: "Ingresá al menos una actividad", variant: "destructive" });
+      return;
+    }
+    const effectiveDate = DATE_RE.test(activityDate) ? activityDate : todayStr;
+    try {
+      setSavingActivities(true);
+      const payload = {
+        items: lines.map(description => ({ description, date: effectiveDate }))
+      };
+      const r = await fetch(`${API}/api/crews/${activitiesTarget.id}/activities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await r.json().catch(() => null);
+      if (!r.ok) {
+        showToast({ title: "No se pudo guardar", description: data?.error || "Intenta nuevamente", variant: "destructive" });
+        return;
+      }
+      setNewActivityText("");
+      await loadActivities(activitiesTarget.id, effectiveDate);
+      showToast({ title: lines.length > 1 ? "Actividades agregadas" : "Actividad agregada", variant: "success" });
+    } catch (err) {
+      showToast({ title: "Ocurrió un error", description: String(err), variant: "destructive" });
+    } finally {
+      setSavingActivities(false);
+    }
+  }
+
+  async function handleDeleteActivity(activityId){
+    if (!activitiesTarget) return;
+    const effectiveDate = DATE_RE.test(activityDate) ? activityDate : todayStr;
+    try {
+      setRemovingActivities(prev => ({ ...prev, [activityId]: true }));
+      const r = await fetch(`${API}/api/crews/${activitiesTarget.id}/activities/${activityId}`, { method: "DELETE" });
+      const data = await r.json().catch(() => null);
+      if (!r.ok) {
+        showToast({ title: "No se pudo eliminar", description: data?.error || "Intenta nuevamente", variant: "destructive" });
+        return;
+      }
+      await loadActivities(activitiesTarget.id, effectiveDate);
+      showToast({ title: "Actividad eliminada", variant: "default" });
+    } catch (err) {
+      showToast({ title: "Ocurrió un error", description: String(err), variant: "destructive" });
+    } finally {
+      setRemovingActivities(prev => {
+        const copy = { ...prev };
+        delete copy[activityId];
+        return copy;
+      });
+    }
+  }
 
   const filtered = useMemo(()=>{
     const s = q.trim().toLowerCase();
@@ -136,6 +246,7 @@ function AdminCrews(){
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="inline-flex gap-2">
+                            <Button size="sm" className="h-8 bg-sky-600 hover:bg-sky-500 text-white" onClick={()=> openActivitiesModal(c)}>Actividades</Button>
                             <Button size="sm" className="h-8 bg-indigo-600 hover:bg-indigo-500 text-white" onClick={()=> { setEditTarget(c); setEditName(c.name); setEditLoc(c.map_url || (c.lat!=null && c.lng!=null ? `${c.lat},${c.lng}` : "")); setShowEdit(true); }}>Editar</Button>
                             <Button size="sm" variant="destructive" className="h-8" onClick={()=> { setDeleteTarget(c); setShowDelete(true); }}>Eliminar</Button>
                           </div>
@@ -165,10 +276,16 @@ function AdminCrews(){
                   const ex = extractLatLng(loc);
                   if (ex) { body.lat = ex.lat; body.lng = ex.lng; }
                 }
+                const lines = newActivitiesText.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+                if (lines.length) {
+                  const safeDate = DATE_RE.test(newActivitiesDate) ? newActivitiesDate : todayStr;
+                  body.activitiesDate = safeDate;
+                  body.activities = lines.map(description => ({ description, date: safeDate }));
+                }
                 const r = await fetch(`${API}/api/crews`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
                 const data = await r.json().catch(()=> null);
                 if (!r.ok) return showToast({ title: 'No se pudo crear', description: data?.error || 'Intenta nuevamente', variant: 'destructive' });
-                setNewName(""); setNewLoc(""); setShowCreate(false); await load();
+                setNewName(""); setNewLoc(""); setNewActivitiesText(""); setNewActivitiesDate(todayStr); setShowCreate(false); await load();
                 showToast({ title: 'Finca creada', variant: 'success' });
               } finally { setCreating(false); }
             }}>{creating ? 'Creando...' : 'Crear'}</Button>
@@ -192,6 +309,20 @@ function AdminCrews(){
               );
             })()
           )}
+          <label className="text-sm text-slate-300">Actividades para el día</label>
+          <div className="grid gap-2">
+            <Input type="date" value={newActivitiesDate} onChange={(e)=>{
+              const value = e.target.value;
+              setNewActivitiesDate(value && DATE_RE.test(value) ? value : todayStr);
+            }} className="bg-[#2A3040] border-white/10 text-slate-200" />
+            <textarea
+              value={newActivitiesText}
+              onChange={(e)=> setNewActivitiesText(e.target.value)}
+              placeholder="Una actividad por línea"
+              className="w-full min-h-[90px] resize-y rounded-md border border-white/10 bg-[#2A3040] px-3 py-2 text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
+            />
+            <p className="text-xs text-slate-400">Se crearán actividades para la fecha seleccionada. Podés dejarlo vacío si no querés agregar actividades ahora.</p>
+          </div>
           <p className="text-xs text-slate-400">Debe ser único y tener 2–80 caracteres.</p>
         </div>
       </Modal>
@@ -254,6 +385,81 @@ function AdminCrews(){
         )}
       >
         <p className="text-slate-300">Se eliminarán también los trabajadores y asistencias asociadas a <span className="font-semibold">{deleteTarget?.name}</span>.</p>
+      </Modal>
+
+      {/* Actividades */}
+      <Modal
+        open={showActivities}
+        onClose={closeActivitiesModal}
+        title={`Actividades${activitiesTarget ? ` — ${activitiesTarget.name}` : ""}`}
+        footer={(
+          <Button onClick={closeActivitiesModal} className="bg-indigo-600 hover:bg-indigo-500 text-white">Cerrar</Button>
+        )}
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300">Fecha</label>
+            <Input
+              type="date"
+              value={activityDate}
+              onChange={(e)=>{
+                const value = e.target.value;
+                setActivityDate(value && DATE_RE.test(value) ? value : todayStr);
+              }}
+              className="bg-[#2A3040] border-white/10 text-slate-200"
+            />
+          </div>
+
+          <div>
+            <div className="mb-2 text-sm font-medium text-slate-200">Actividades asignadas</div>
+            {activitiesLoading ? (
+              <p className="text-sm text-slate-400">Cargando actividades...</p>
+            ) : activities.length === 0 ? (
+              <p className="text-sm text-slate-400">No hay actividades para esta fecha.</p>
+            ) : (
+              <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                {activities.map(activity => (
+                  <div key={activity.id} className="flex items-start justify-between gap-3 rounded-md border border-white/10 bg-[#2A3040] px-3 py-2">
+                    <div className="flex-1 whitespace-pre-wrap break-words text-sm text-slate-100">{activity.description}</div>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="h-8 px-3"
+                      onClick={()=> handleDeleteActivity(activity.id)}
+                      disabled={!!removingActivities[activity.id]}
+                    >
+                      {removingActivities[activity.id] ? (
+                        <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10" opacity=".25" />
+                          <path d="M22 12a10 10 0 00-10-10" />
+                        </svg>
+                      ) : (
+                        'Eliminar'
+                      )}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300">Agregar actividades</label>
+            <textarea
+              value={newActivityText}
+              onChange={(e)=> setNewActivityText(e.target.value)}
+              placeholder="Una actividad por línea"
+              className="w-full min-h-[100px] resize-y rounded-md border border-white/10 bg-[#2A3040] px-3 py-2 text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/60"
+            />
+             <p className="text-xs text-slate-400">Se crean una o varias actividades para la fecha seleccionada (una por cada línea).</p>
+            <div className="flex justify-end">
+              <Button onClick={handleAddActivities} disabled={savingActivities || !newActivityText.trim()} className="bg-emerald-600 hover:bg-emerald-500 text-white">
+                {savingActivities ? 'Guardando...' : 'Agregar'}
+              </Button>
+            </div>
+           
+          </div>
+        </div>
       </Modal>
     </div>
   );

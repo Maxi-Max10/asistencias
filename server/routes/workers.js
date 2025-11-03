@@ -12,25 +12,43 @@ router.get("/", (req, res, next) => {
     // If createdSince provided, return new workers since timestamp (UTC ISO)
     const createdSince = req.query.createdSince || req.query.newSince || null;
     if (createdSince) {
-      const ts = String(createdSince);
+      // Normalizá a formato SQLite 'YYYY-MM-DD HH:MM:SS' en UTC
+      let sinceSql;
+      try {
+        const d = new Date(String(createdSince));
+        if (!isNaN(d.getTime())) {
+          sinceSql = d.toISOString().slice(0, 19).replace('T', ' ');
+        }
+      } catch {}
+      const ts = sinceSql || String(createdSince).replace('T', ' ').replace('Z', '').slice(0, 19);
       const rows = db.prepare(`
         SELECT w.id, w.fullname, IFNULL(w.doc,'') AS doc, w.crew_id, w.created_at,
                c.name AS crew_name
         FROM workers w
         LEFT JOIN crews c ON c.id = w.crew_id
-        WHERE w.active = 1 AND w.created_at >= ?
+        WHERE w.active = 1 AND datetime(w.created_at) >= datetime(?)
         ORDER BY w.created_at DESC
       `).all(ts);
       return res.json(rows);
     }
 
-    const crewId = Number(req.query.crewId || 1);
-    const rows = db.prepare(`
+    const crewId = Number(req.query.crewId);
+    if (!crewId || !Number.isFinite(crewId)) {
+      // Si no se envía una finca válida, devolvemos lista vacía
+      return res.json([]);
+    }
+    const crewExists = db.prepare("SELECT 1 FROM crews WHERE id = ?").get(crewId);
+    if (!crewExists) return res.json([]);
+    const rows = db
+      .prepare(
+        `
       SELECT id, fullname, IFNULL(doc,'') AS doc
       FROM workers
       WHERE crew_id = ? AND active = 1
       ORDER BY fullname
-    `).all(crewId);
+    `
+      )
+      .all(crewId);
     res.json(rows);
   } catch (e) { next(e); }
 });
@@ -38,9 +56,13 @@ router.get("/", (req, res, next) => {
 // POST /api/workers { crewId, doc, fullname }
 router.post("/", (req, res, next) => {
   try {
-    const crew = Number(req.body?.crewId || 1);
+    const crew = Number(req.body?.crewId);
     const { doc, fullname } = req.body || {};
     if (!doc) return res.status(400).json({ error: "Documento requerido" });
+
+    if (!crew || !Number.isFinite(crew)) return res.status(400).json({ error: "Finca (crewId) requerida" });
+    const crewExists = db.prepare("SELECT 1 FROM crews WHERE id = ?").get(crew);
+    if (!crewExists) return res.status(400).json({ error: "La finca indicada no existe" });
 
     const ndoc = normDoc(doc);
     if (!isValidDoc(ndoc)) return res.status(400).json({ error: "Documento inválido (solo dígitos, 5-15)" });
@@ -81,7 +103,14 @@ router.put("/:id", (req, res, next) => {
     const fields = [];
     const params = [];
 
-    if (crewId != null) { fields.push("crew_id = ?"); params.push(Number(crewId)); }
+    if (crewId != null) {
+      const cid = Number(crewId);
+      if (!cid || !Number.isFinite(cid)) return res.status(400).json({ error: "crewId inválido" });
+      const crewExists = db.prepare("SELECT 1 FROM crews WHERE id = ?").get(cid);
+      if (!crewExists) return res.status(400).json({ error: "La finca indicada no existe" });
+      fields.push("crew_id = ?");
+      params.push(cid);
+    }
     if (fullname != null) {
       if (String(fullname).trim() && !isValidName(fullname)) return res.status(400).json({ error: "Nombre inválido (solo letras y espacios, 2-60)" });
       fields.push("fullname = ?"); params.push(String(fullname).trim() || "-");

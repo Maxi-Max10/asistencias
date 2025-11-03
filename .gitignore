@@ -31,3 +31,5 @@ logs/
 *.log
 tmp/
 coverage/
+node_modules
+node_modules

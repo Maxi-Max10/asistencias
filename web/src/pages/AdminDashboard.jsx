@@ -170,7 +170,8 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState({});
   const [range, setRange] = useState("week");
   const [query, setQuery] = useState("");
-  const [day, setDay] = useState(todayLocal());
+  // Filtro de fecha opcional: vacío = ver últimos 30 sin filtrar
+  const [day, setDay] = useState("");
   const [showNotif, setShowNotif] = useState(false);
   const [newWorkers, setNewWorkers] = useState([]);
 
@@ -279,22 +280,13 @@ export default function AdminDashboard() {
 
   const barData = useMemo(
     () =>
-      (topFincasRaw.length
-        ? topFincasRaw
-        : [
-            { name: "Cuadrilla 1", filas: 7, asistencias: 6 },
-            { name: "Cuadrilla 4", filas: 3, asistencias: 2 },
-            { name: "Cuadrilla 2", filas: 2, asistencias: 2 },
-            { name: "Cuadrilla 3", filas: 2, asistencias: 2 },
-            { name: "Cuadrilla 5", filas: 1, asistencias: 1 },
-          ]
-      ).map((f) => {
+      (topFincasRaw || []).map((f) => {
         const fallback = asFincaName(f.name ?? f.finca ?? f.crewName ?? f.crewId ?? f.crew_id ?? "-");
         const mapped = crewNameById[String(f.crewId ?? f.crew_id ?? f.id ?? "")] || fallback;
         return {
           name: mapped,
-        filas: Number(f.filas ?? 0),
-        asistencias: Number(f.asistencias ?? 0),
+          filas: Number(f.filas ?? 0),
+          asistencias: Number(f.asistencias ?? 0),
         };
       }),
     [topFincasRaw, crewNameById]
@@ -382,13 +374,25 @@ export default function AdminDashboard() {
               Mes
             </ToggleGroupItem>
           </ToggleGroup>
-          <input
-            type="date"
-            value={day}
-            onChange={(e) => setDay(e.target.value)}
-            className="h-9 rounded-md border border-white/10 bg-[#2A3040] px-3 text-sm text-slate-200 placeholder:text-slate-400"
-            title="Filtrar por día"
-          />
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={day || ""}
+              onChange={(e) => setDay(e.target.value)}
+              className="h-9 rounded-md border border-white/10 bg-[#2A3040] px-3 text-sm text-slate-200 placeholder:text-slate-400"
+              title="Filtrar por día (dejalo vacío para ver todos)"
+            />
+            {day && (
+              <Button
+                variant="secondary"
+                className="border-white/10 bg-[#2A3040] text-slate-200 hover:bg-[#343B4E]"
+                onClick={() => setDay("")}
+                title="Quitar filtro de fecha"
+              >
+                Ver todos
+              </Button>
+            )}
+          </div>
           <Button
             variant="secondary"
             className="border-white/10 bg-[#2A3040] text-slate-200 hover:bg-[#343B4E]"
@@ -674,13 +678,25 @@ export default function AdminDashboard() {
               placeholder="Buscar nombre, DNI o finca..."
               className="w-64 bg-[#2A3040] border-white/10 text-slate-200 placeholder:text-slate-400"
             />
-            <input
-              type="date"
-              value={day}
-              onChange={(e) => setDay(e.target.value)}
-              className="h-9 rounded-md border border-white/10 bg-[#2A3040] px-3 text-sm text-slate-200 placeholder:text-slate-400"
-              title="Filtrar por día"
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={day || ""}
+                onChange={(e) => setDay(e.target.value)}
+                className="h-9 rounded-md border border-white/10 bg-[#2A3040] px-3 text-sm text-slate-200 placeholder:text-slate-400"
+                title="Filtrar por día (dejalo vacío para ver todos)"
+              />
+              {day && (
+                <Button
+                  variant="secondary"
+                  className="border-white/10 bg-[#2A3040] text-slate-200 hover:bg-[#343B4E]"
+                  onClick={() => setDay("")}
+                  title="Quitar filtro de fecha"
+                >
+                  Ver todos
+                </Button>
+              )}
+            </div>
             <Button variant="outline" className="border-white/10 text-slate-200 hover:bg-[#343B4E]" onClick={() => downloadCSV(filteredRecent, `recent-${day}.csv`)}>
               <Download className="mr-2 h-4 w-4" /> CSV
             </Button>

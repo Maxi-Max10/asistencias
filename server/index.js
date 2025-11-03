@@ -34,14 +34,22 @@ try {
   console.warn("[WEB] Static serving not configured:", e.message);
 }
 
-// Seed inicial de crews
+// Seed inicial de crews (opcional)
 try {
-  const row = db.prepare("SELECT COUNT(*) AS c FROM crews").get();
-  if (!row || !row.c) {
-    const names = ["Finca A", "Finca B", "Finca C", "Finca D", "Finca E"];
-    const ins = db.prepare("INSERT INTO crews (name) VALUES (?)");
-    db.transaction(() => names.forEach(n => ins.run(n)))();
-    console.log("Crews iniciales creados.");
+  const shouldSeed = (() => {
+    const v = String(process.env.SEED_CREWS ?? "1").toLowerCase();
+    return v === "1" || v === "true" || v === "yes";
+  })();
+  if (shouldSeed) {
+    const row = db.prepare("SELECT COUNT(*) AS c FROM crews").get();
+    if (!row || !row.c) {
+      const names = ["Finca A", "Finca B", "Finca C", "Finca D", "Finca E"];
+      const ins = db.prepare("INSERT INTO crews (name) VALUES (?)");
+      db.transaction(() => names.forEach(n => ins.run(n)))();
+      console.log("Crews iniciales creados.");
+    }
+  } else {
+    console.log("[SEED] SEED_CREWS=0 => se desactiva auto-seed de fincas.");
   }
 } catch (e) {
   console.error("Error auto-seeding crews:", e);
