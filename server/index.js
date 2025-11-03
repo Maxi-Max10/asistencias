@@ -37,7 +37,7 @@ try {
 // Seed inicial de crews (opcional)
 try {
   const shouldSeed = (() => {
-    const v = String(process.env.SEED_CREWS ?? "1").toLowerCase();
+    const v = String(process.env.SEED_CREWS ?? "0").toLowerCase();
     return v === "1" || v === "true" || v === "yes";
   })();
   if (shouldSeed) {
